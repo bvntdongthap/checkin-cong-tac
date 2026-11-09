@@ -745,9 +745,12 @@ $('#d-csv').addEventListener('click', async () => {
     [['Người lập', 1, 4], ['TP. HCNS', 7, 10], ['BLĐ', 11, N]].forEach(([t, a, b]) => {
       ws.mergeCells(sig, a, sig, b); ws.mergeCells(sig + 1, a, sig + 1, b);
       const c1 = ws.getCell(sig, a); c1.value = t; c1.alignment = { horizontal: 'center', vertical: 'top' }; font(c1, { bold: true });
-      const c2 = ws.getCell(sig + 1, a); c2.value = '(Ký, ghi rõ họ tên)'; c2.alignment = { horizontal: 'center', vertical: 'bottom' }; font(c2, { italic: true });
+      const c2 = ws.getCell(sig + 1, a); c2.value = '(Ký, ghi rõ họ tên)'; c2.alignment = { horizontal: 'center', vertical: 'top' }; font(c2, { italic: true });
     });
     ws.getRow(sig + 1).height = 50;                        // chỗ để ký
+
+    // toàn bộ nội dung canh giữa ngang (giữ nguyên căn dọc và xuống dòng)
+    ws.eachRow({ includeEmpty: false }, row => row.eachCell(c => { c.alignment = { ...(c.alignment || {}), horizontal: 'center' }; }));
 
     // toàn bộ văn bản: Times New Roman 13 (giữ đậm/màu đã đặt)
     ws.eachRow({ includeEmpty: false }, row => row.eachCell(c => { c.font = { ...(c.font || {}), name: FONT, size: SZ }; }));
