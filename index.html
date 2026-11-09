@@ -19,7 +19,7 @@
   h1 { font-size:22px; margin:0 0 6px; color:var(--teal); } h2 { font-size:19px; margin:0 0 14px; color:var(--teal); }
   .sub { color:var(--muted); font-size:14px; margin:0 0 18px; line-height:1.5; }
   label.f { display:block; font-size:14px; color:var(--muted); margin:14px 0 6px; font-weight:bold; }
-  input[type=text], input[type=password], input[type=date], input[type=search], textarea, select {
+  input[type=text], input[type=password], input[type=date], input[type=month], input[type=search], textarea, select {
     width:100%; padding:12px; font-size:16px; border-radius:10px; border:1px solid var(--teal2);
     background:#fff; color:var(--text); color-scheme:light; font-family:inherit; }
   input:focus, textarea:focus, select:focus { outline:2px solid var(--sky); border-color:var(--teal); }
@@ -66,6 +66,11 @@
   .tools { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
   .tools input, .tools select { width:auto; padding:8px 10px; font-size:14px; }
   .tools button { padding:8px 12px; font-size:14px; }
+  .tools button.nav { padding:8px 11px; font-size:16px; line-height:1; }
+  button.danger { background:#fff; color:var(--err); border:1px solid var(--err); font-weight:bold; }
+  button.danger:hover:not(:disabled) { background:#FBEDEB; filter:none; }
+  .card .del { margin-top:8px; padding:6px 10px; font-size:13px; background:#fff; color:var(--err); border:1px solid #E8B7B1; font-weight:normal; }
+  .card .del:hover:not(:disabled) { background:#FBEDEB; filter:none; }
   .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; }
   .card { background:#fff; border:1px solid var(--sky); border-radius:12px; overflow:hidden; font-size:14px;
           box-shadow:0 2px 8px rgba(56,128,135,.08); }
@@ -152,12 +157,20 @@
   <div class="dash-head">
     <h2>Theo dõi checkin công tác</h2>
     <div class="tools">
-      <input type="date" id="f-date" title="Lọc theo ngày (để trống = tất cả)">
+      <select id="f-ky" title="Lọc theo kỳ">
+        <option value="ngay">Theo ngày</option><option value="tuan">Theo tuần</option>
+        <option value="thang">Theo tháng</option><option value="tatca">Tất cả</option>
+      </select>
+      <button class="sec nav" id="d-prev" title="Kỳ trước">‹</button>
+      <input type="date" id="f-date" title="Chọn ngày (theo tuần: chọn một ngày bất kỳ trong tuần)">
+      <input type="month" id="f-month" title="Chọn tháng" style="display:none">
+      <button class="sec nav" id="d-next" title="Kỳ sau">›</button>
       <select id="f-phong"><option value="">Tất cả phòng</option></select>
       <input type="search" id="f-q" placeholder="Tìm tên, khu vực…">
       <button class="sec" id="d-reload">Tải lại</button>
       <button class="sec" id="d-csv">Tải Excel (có ảnh)</button>
       <button class="sec" id="d-pw">Đổi mật khẩu</button>
+      <button class="danger" id="d-delall">Xoá tất cả đang lọc</button>
       <button class="sec" id="d-out">Thoát</button>
     </div>
   </div>
@@ -521,22 +534,58 @@ async function loadDash() {
     renderDash();
   } catch (e) { $('#d-stat').innerHTML = `<span class="err">Không tải được: ${esc(e.message)}</span>`; }
 }
+/* kỳ lọc: ngày / tuần (thứ 2 → CN) / tháng / tất cả */
+const fmtDM = d => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
+function period() {
+  const ky = $('#f-ky').value;
+  if (ky === 'tatca') return { ky, label: 'tất cả các ngày', key: 'tat-ca' };
+  if (ky === 'thang') {
+    const v = $('#f-month').value || dayKey(Date.now()).slice(0, 7), [y, m] = v.split('-').map(Number);
+    return { ky, from: new Date(y, m - 1, 1).getTime(), to: new Date(y, m, 1).getTime(), label: `tháng ${pad(m)}/${y}`, key: v };
+  }
+  const v = $('#f-date').value || dayKey(Date.now()), [y, m, d] = v.split('-').map(Number);
+  if (ky === 'tuan') {
+    const lui = (new Date(y, m - 1, d).getDay() + 6) % 7, s = new Date(y, m - 1, d - lui), e = new Date(y, m - 1, d - lui + 7);
+    return { ky, from: s.getTime(), to: e.getTime(), label: `tuần ${fmtDM(s)} – ${fmtDM(new Date(e - 1))}/${new Date(e - 1).getFullYear()}`, key: 'tuan-' + dayKey(s) };
+  }
+  return { ky, from: new Date(y, m - 1, d).getTime(), to: new Date(y, m - 1, d + 1).getTime(), label: `ngày ${pad(d)}/${pad(m)}/${y}`, key: v };
+}
+function syncKy() {
+  const ky = $('#f-ky').value;
+  $('#f-date').style.display = ky === 'ngay' || ky === 'tuan' ? '' : 'none';
+  $('#f-month').style.display = ky === 'thang' ? '' : 'none';
+  $('#d-prev').style.display = $('#d-next').style.display = ky === 'tatca' ? 'none' : '';
+}
+function shiftKy(n) {
+  const ky = $('#f-ky').value;
+  if (ky === 'thang') {
+    const [y, m] = ($('#f-month').value || dayKey(Date.now()).slice(0, 7)).split('-').map(Number), t = new Date(y, m - 1 + n, 1);
+    $('#f-month').value = `${t.getFullYear()}-${pad(t.getMonth() + 1)}`;
+  } else {
+    const [y, m, d] = ($('#f-date').value || dayKey(Date.now())).split('-').map(Number);
+    $('#f-date').value = dayKey(new Date(y, m - 1, d + n * (ky === 'tuan' ? 7 : 1)));
+  }
+  renderDash();
+}
 function filtered() {
-  const d = $('#f-date').value, p = $('#f-phong').value, q = $('#f-q').value.trim().toLowerCase();
-  return rows.filter(r => (!d || dayKey(r.at) === d) && (!p || r.phong === p) &&
-    (!q || `${r.hoTen} ${r.chucDanh} ${r.donVi} ${r.noiDung}`.toLowerCase().includes(q)));
+  const per = period(), p = $('#f-phong').value, q = $('#f-q').value.trim().toLowerCase();
+  return rows.filter(r => (!per.from || (r.at >= per.from && r.at < per.to)) && (r.bad || !p || r.phong === p) &&
+    (!q || r.bad || `${r.hoTen} ${r.chucDanh} ${r.donVi} ${r.noiDung}`.toLowerCase().includes(q)));
 }
 function renderDash() {
-  const list = filtered(), people = new Set(list.filter(r => !r.bad).map(r => r.hoTen));
-  const d = $('#f-date').value, p = $('#f-phong').value;
-  const scope = DS.filter(x => !p || x.phong === p);
-  const chua = d ? scope.filter(x => !people.has(x.ten)).map(x => x.ten) : [];
-  $('#d-stat').innerHTML = `${list.length} lượt checkin · ${people.size} người` +
-    (d ? ` · ngày ${d.split('-').reverse().join('/')} · <b>${scope.length - chua.length}/${scope.length}</b> cán bộ đã checkin` +
-         (chua.length ? `<br><span class="warn">Chưa checkin: ${chua.map(esc).join(', ')}</span>` : ' <span class="ok">✓ đủ</span>')
-       : ' · tất cả các ngày');
+  syncKy();
+  const list = filtered(), ok = list.filter(r => !r.bad), per = period(), p = $('#f-phong').value;
+  const dem = new Map(); ok.forEach(r => dem.set(r.hoTen, (dem.get(r.hoTen) || 0) + 1));
+  const scope = DS.filter(x => !p || x.phong === p), chua = scope.filter(x => !dem.has(x.ten)).map(x => x.ten);
+  let html = `<b>${per.label[0].toUpperCase() + per.label.slice(1)}</b> · ${list.length} lượt checkin · ${dem.size} người` +
+             ` · <b>${scope.length - chua.length}/${scope.length}</b> cán bộ có checkin`;
+  if (per.ky !== 'ngay' && dem.size) html += `<br>Số lượt theo người: ${[...dem].sort((a, b) => b[1] - a[1]).map(([n, c]) => `${esc(n)} (${c})`).join(' · ')}`;
+  html += chua.length ? `<br><span class="warn">Chưa checkin: ${chua.map(esc).join(', ')}</span>` : ' <span class="ok">✓ đủ</span>';
+  $('#d-stat').innerHTML = html;
+  $('#d-delall').disabled = !list.length;
+  $('#d-delall').textContent = list.length ? `Xoá tất cả đang lọc (${list.length})` : 'Xoá tất cả đang lọc';
   $('#d-grid').innerHTML = list.map(r => r.bad
-    ? `<div class="card"><div class="bd err">Lượt checkin không giải mã được (${fmtTime(r.at)})</div></div>`
+    ? `<div class="card"><div class="bd err">Lượt checkin không giải mã được (${fmtTime(r.at)})<br><button class="del" data-del="${r.id}">🗑 Xoá</button></div></div>`
     : `<div class="card">
         <img class="ph" src="${r.anhNho}" data-id="${r.id}" alt="Ảnh checkin ${esc(r.hoTen)}" title="Bấm xem ảnh lớn">
         <div class="bd">
@@ -547,11 +596,45 @@ function renderDash() {
           <div>📏 ${KC_LABEL}: <b>${fmtKc(r.kc ?? kcMet(r.lat, r.lng))}</b> · <a href="${dirLink(r.lat, r.lng)}" target="_blank" rel="noopener">Chỉ đường</a></div>
           ${r.noiDung ? `<div>📝 ${esc(r.noiDung)}</div>` : ''}
           ${Math.abs(r.mayLuc - r.at) > 10 * 60e3 ? `<div class="warn">Giờ trên máy lệch ${Math.round(Math.abs(r.mayLuc - r.at) / 60e3)} phút</div>` : ''}
+          <button class="del" data-del="${r.id}">🗑 Xoá</button>
         </div></div>`).join('') || '<div class="muted">Không có lượt checkin nào.</div>';
 }
 $('#f-date').addEventListener('change', renderDash);
+$('#f-month').addEventListener('change', renderDash);
+$('#f-ky').addEventListener('change', renderDash);
+$('#d-prev').addEventListener('click', () => shiftKy(-1));
+$('#d-next').addEventListener('click', () => shiftKy(1));
 $('#f-phong').addEventListener('change', renderDash);
 $('#f-date').value = dayKey(Date.now());          // mặc định xem hôm nay
+$('#f-month').value = dayKey(Date.now()).slice(0, 7);
+
+/* ---------- xoá: luôn hỏi lại trước khi xoá ---------- */
+async function delIds(ids) {
+  for (let i = 0; i < ids.length; i += 200) {             // gửi từng đợt 200 lượt
+    const body = {};
+    ids.slice(i, i + 200).forEach(id => { body[`r/${id}`] = null; body[`p/${id}`] = null; });
+    await fb('PATCH', '', body);
+  }
+  const set = new Set(ids); rows = rows.filter(r => !set.has(r.id)); renderDash();
+}
+$('#d-grid').addEventListener('click', async e => {
+  const b = e.target.closest('[data-del]'); if (!b) return;
+  e.stopPropagation();
+  const r = rows.find(x => x.id === b.dataset.del); if (!r) return;
+  const ai = r.bad ? 'lượt không giải mã được' : `${r.hoTen} (${r.chucDanh})`;
+  if (!confirm(`Xoá lượt checkin của ${ai} lúc ${fmtTime(r.at)}?\n\nĐã xoá thì KHÔNG khôi phục được.`)) return;
+  b.disabled = true; b.textContent = 'Đang xoá…';
+  try { await delIds([r.id]); } catch (err) { alert('Không xoá được: ' + err.message); b.disabled = false; b.textContent = '🗑 Xoá'; }
+});
+$('#d-delall').addEventListener('click', async () => {
+  const list = filtered(); if (!list.length) return;
+  const per = period(), p = $('#f-phong').value, q = $('#f-q').value.trim();
+  const pham = [per.label, p, q && `tìm "${q}"`].filter(Boolean).join(' · ');
+  if (!confirm(`Xoá HẾT ${list.length} lượt checkin đang hiển thị?\n(${pham})\n\nĐã xoá thì KHÔNG khôi phục được.`)) return;
+  const btn = $('#d-delall'); btn.disabled = true; btn.textContent = 'Đang xoá…';
+  try { await delIds(list.map(r => r.id)); alert(`Đã xoá ${list.length} lượt checkin.`); }
+  catch (err) { alert('Không xoá được: ' + err.message); renderDash(); }
+});
 $('#f-q').addEventListener('input', renderDash);
 $('#d-reload').addEventListener('click', loadDash);
 $('#d-out').addEventListener('click', () => { priv = null; rows = []; $('#d-grid').innerHTML = ''; go('v-home'); });
@@ -619,7 +702,7 @@ $('#d-csv').addEventListener('click', async () => {
     const buf = await wb.xlsx.writeBuffer();
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
-    a.download = `checkin-cong-tac-${$('#f-date').value || 'tat-ca'}.xlsx`; a.click();
+    a.download = `checkin-cong-tac-${period().key}.xlsx`; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 30000);
   } catch (e) { alert('Không xuất được Excel: ' + e.message); }
   btn.disabled = false; btn.textContent = label;
