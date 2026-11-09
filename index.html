@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Checkin Công Tác</title>
+<style>
+  * { box-sizing: border-box; }
+  /* Bảng màu: #388087 · #6FB3B8 · #BADFE7 · #C2EDCE · #F6F6F2 */
+  :root { --teal:#388087; --teal2:#6FB3B8; --sky:#BADFE7; --mint:#C2EDCE; --bg:#F6F6F2;
+          --card:#FFFFFF; --line:#BADFE7; --muted:#5E7F84; --text:#1F3D40; --acc:#388087;
+          --ok:#2F7D4F; --err:#B83A2E; --warn:#A8670F; }
+  body { margin:0; min-height:100vh; padding:16px; font-family:Arial,sans-serif; background:var(--bg); color:var(--text);
+         display:flex; justify-content:center; align-items:flex-start; }
+  .view { display:none; width:100%; max-width:460px; background:var(--card); border-radius:14px; padding:22px; margin-top:4vh;
+          border-top:6px solid var(--teal); box-shadow:0 8px 24px rgba(56,128,135,.14); }
+  .view.active { display:block; }
+  #v-dash { max-width:1100px; margin-top:0; }
+  h1 { font-size:22px; margin:0 0 6px; color:var(--teal); } h2 { font-size:19px; margin:0 0 14px; color:var(--teal); }
+  .sub { color:var(--muted); font-size:14px; margin:0 0 18px; line-height:1.5; }
+  label.f { display:block; font-size:14px; color:var(--muted); margin:14px 0 6px; font-weight:bold; }
+  input[type=text], input[type=password], input[type=date], input[type=search], textarea, select {
+    width:100%; padding:12px; font-size:16px; border-radius:10px; border:1px solid var(--teal2);
+    background:#fff; color:var(--text); color-scheme:light; font-family:inherit; }
+  input:focus, textarea:focus, select:focus { outline:2px solid var(--sky); border-color:var(--teal); }
+  textarea { min-height:70px; resize:vertical; }
+  button { padding:12px 14px; font-size:16px; border:0; border-radius:10px; cursor:pointer; background:var(--teal);
+           color:#fff; font-weight:bold; font-family:inherit; }
+  button:hover:not(:disabled) { filter:brightness(1.08); }
+  button.sec { background:var(--sky); color:var(--text); font-weight:normal; }
+  button:disabled { opacity:.45; cursor:default; }
+  .row { display:flex; gap:10px; margin-top:16px; } .row > button { flex:1; }
+  .role { display:block; width:100%; text-align:left; padding:18px; margin-bottom:12px; background:var(--bg);
+          border:1px solid var(--sky); border-left:6px solid var(--teal2); color:var(--text); font-weight:normal; }
+  .role:hover { background:var(--mint); border-left-color:var(--teal); filter:none; }
+  .role b { display:block; font-size:18px; margin-bottom:4px; color:var(--teal); }
+  .role span { color:var(--muted); font-size:14px; }
+  .box { border:1px solid var(--sky); background:var(--bg); border-radius:10px; padding:12px; margin-top:6px; font-size:14px; line-height:1.6; }
+  .box.ok { background:var(--mint); border-color:var(--mint); }
+  .ok { color:var(--ok); } .err { color:var(--err); } .warn { color:var(--warn); } .muted { color:var(--muted); }
+  .box.ok, .box.ok .muted { color:var(--text); }
+  .msg { min-height:20px; font-size:14px; margin-top:10px; }
+  .cam-view { position:relative; border:2px dashed var(--teal2); border-radius:10px; overflow:hidden; background:#EAF5F7;
+              min-height:160px; display:flex; align-items:center; justify-content:center; }
+  .cam-view video, .cam-view canvas { display:none; width:100%; max-height:60vh; object-fit:contain; background:#000; }
+  .cam-view.live video, .cam-view.shot canvas { display:block; }
+  .cam-view.live, .cam-view.shot { border-style:solid; border-color:var(--teal); }
+  .cam-view.live .cam-ph, .cam-view.shot .cam-ph { display:none; }
+  .cam-view.mirror video { transform:scaleX(-1); }
+  .cam-ph { color:var(--muted); padding:20px; text-align:center; }
+  .cam-btns { margin-top:8px; } .cam-btns #cam-flip { flex:0 0 56px; }
+  a { color:var(--teal); font-weight:bold; }
+  .back { background:none; color:var(--muted); padding:0; font-weight:normal; font-size:14px; margin-bottom:12px; }
+  /* bảng theo dõi */
+  .dash-head { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .dash-head h2 { margin:0; }
+  .tools { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .tools input, .tools select { width:auto; padding:8px 10px; font-size:14px; }
+  .tools button { padding:8px 12px; font-size:14px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; }
+  .card { background:#fff; border:1px solid var(--sky); border-radius:12px; overflow:hidden; font-size:14px;
+          box-shadow:0 2px 8px rgba(56,128,135,.08); }
+  .card .ph { width:100%; aspect-ratio:4/3; object-fit:cover; display:block; background:var(--sky); cursor:zoom-in; }
+  .card .bd { padding:10px 12px; line-height:1.55; border-top:4px solid var(--mint); }
+  .card .nm { font-weight:bold; font-size:15px; color:var(--teal); }
+  .lightbox { position:fixed; inset:0; background:rgba(31,61,64,.92); display:none; align-items:center; justify-content:center; z-index:9; padding:16px; }
+  .lightbox img { max-width:100%; max-height:100%; border-radius:8px; }
+  .stat { color:var(--text); font-size:14px; margin-bottom:12px; background:var(--bg); border-left:4px solid var(--teal2);
+          padding:8px 12px; border-radius:6px; line-height:1.6; }
+</style>
+</head>
+<body>
+
+<!-- ===== Màn chọn vai trò ===== -->
+<div class="view" id="v-home">
+  <h1>Checkin công tác</h1>
+  <p class="sub">Dành riêng cho cán bộ công ty đi công tác.</p>
+  <button class="role" data-go="v-staff"><b>Cán bộ đi công tác</b><span>Checkin: định vị + chụp ảnh tại nơi công tác</span></button>
+  <button class="role" data-go="v-login"><b>HCNS</b><span>Nhập mật khẩu để theo dõi toàn bộ lượt checkin</span></button>
+  <div class="msg warn" id="ctx-warn"></div>
+</div>
+
+<!-- ===== Cán bộ checkin ===== -->
+<div class="view" id="v-staff">
+  <button class="back" data-go="v-home">← Chọn lại vai trò</button>
+  <h2>Checkin công tác</h2>
+
+  <label class="f" for="s-name">Cán bộ checkin *</label>
+  <select id="s-name"></select>
+  <div class="box" id="s-info" style="display:none"></div>
+  <label class="f" for="s-note">Nơi / nội dung công tác</label>
+  <textarea id="s-note" placeholder="VD: Làm việc với khách hàng tại TP Cao Lãnh"></textarea>
+
+  <label class="f">Vị trí hiện tại * (bắt buộc)</label>
+  <div class="box" id="geo-box">Đang lấy vị trí…</div>
+  <div class="row" style="margin-top:8px"><button class="sec" id="geo-btn">Lấy lại vị trí</button></div>
+
+  <label class="f">Ảnh checkin * (chụp trực tiếp bằng camera, không tải ảnh có sẵn)</label>
+  <div class="cam" id="cam">
+    <div class="cam-view">
+      <video id="cam-video" playsinline muted autoplay></video>
+      <canvas id="cam-shot"></canvas>
+      <div class="cam-ph" id="cam-ph">📷 Chưa mở camera</div>
+    </div>
+    <div class="row cam-btns">
+      <button type="button" class="sec" id="cam-open">Mở camera</button>
+      <button type="button" id="cam-snap" style="display:none">Chụp</button>
+      <button type="button" class="sec" id="cam-flip" style="display:none" title="Đổi camera trước / sau">🔄</button>
+      <button type="button" class="sec" id="cam-retake" style="display:none">Chụp lại</button>
+    </div>
+    <div class="msg" id="cam-msg"></div>
+  </div>
+
+  <div class="msg" id="s-msg"></div>
+  <div class="row"><button id="s-submit">Gửi checkin</button></div>
+</div>
+
+<!-- ===== Gửi xong ===== -->
+<div class="view" id="v-done">
+  <h2 class="ok">✓ Checkin thành công</h2>
+  <div class="box" id="done-sum"></div>
+  <div class="row"><button class="sec" data-go="v-home">Về màn đầu</button><button id="again">Checkin lần nữa</button></div>
+</div>
+
+<!-- ===== HCNS đăng nhập / thiết lập ===== -->
+<div class="view" id="v-login">
+  <button class="back" data-go="v-home">← Chọn lại vai trò</button>
+  <h2 id="login-title">HCNS — nhập mật khẩu</h2>
+  <p class="sub" id="login-sub"></p>
+  <label class="f" for="pw1">Mật khẩu</label>
+  <input type="password" id="pw1" autocomplete="current-password">
+  <div id="pw2-wrap" style="display:none">
+    <label class="f" for="pw2">Nhập lại mật khẩu</label>
+    <input type="password" id="pw2" autocomplete="new-password">
+  </div>
+  <div class="msg" id="login-msg"></div>
+  <div class="row"><button id="login-btn">Vào theo dõi</button></div>
+</div>
+
+<!-- ===== HCNS theo dõi ===== -->
+<div class="view" id="v-dash">
+  <div class="dash-head">
+    <h2>Theo dõi checkin công tác</h2>
+    <div class="tools">
+      <input type="date" id="f-date" title="Lọc theo ngày (để trống = tất cả)">
+      <select id="f-phong"><option value="">Tất cả phòng</option></select>
+      <input type="search" id="f-q" placeholder="Tìm tên, khu vực…">
+      <button class="sec" id="d-reload">Tải lại</button>
+      <button class="sec" id="d-csv">Tải Excel (có ảnh)</button>
+      <button class="sec" id="d-pw">Đổi mật khẩu</button>
+      <button class="sec" id="d-out">Thoát</button>
+    </div>
+  </div>
+  <div class="stat" id="d-stat"></div>
+  <div class="grid" id="d-grid"></div>
+</div>
+
+<div class="lightbox" id="lightbox"><img alt=""></div>
+
+<script>
+/* ======================================================================
+   Lưu trữ: Firebase Realtime Database (dự án "Dinh", dùng chung với Checkin HNKH)
+   events/<CODE>/info      khoá công khai + khoá bí mật đã khoá bằng mật khẩu HCNS
+   events/<CODE>/r/<id>    lượt checkin (đã mã hoá: tên, đơn vị, toạ độ, ảnh nhỏ)
+   events/<CODE>/p/<id>    ảnh đầy đủ (đã mã hoá)
+   Mọi nội dung được mã hoá trên máy cán bộ bằng khoá công khai; chỉ người có mật khẩu
+   HCNS mới giải mã được. Người cầm link chỉ thấy chuỗi đã mã hoá.
+   ====================================================================== */
+const FB_URL = 'https://dinh-8a79b-default-rtdb.asia-southeast1.firebasedatabase.app';
+const CODE_Q = (new URLSearchParams(location.search).get('ma') || '').toUpperCase();
+const CODE   = /^HNKH-\d{4}-[A-Z0-9]{6}$/.test(CODE_Q) ? CODE_Q : 'HNKH-0101-CT7Q4M';   // ?ma=… để dùng kho riêng (thử nghiệm)
+const BASE   = `${FB_URL}/events/${CODE}`;
+/* Sau khi HCNS đặt mật khẩu lần đầu, dán khoá công khai vào đây để không ai tráo được khoá. */
+/* Bản dự phòng khoá HCNS (đặt 09/11/2026 18:15) — khoá bí mật vẫn bị khoá bằng mật khẩu,
+   dùng khi bản trên Firebase bị xoá / bị tráo. Đổi mật khẩu thì bản này vẫn mở bằng mật khẩu CŨ. */
+const PINNED_INFO = {"v": 1, "pub": "BKN7bEIwIcDH5JH5Q4MwwP6viLLu6hRkUE1kwur0eEcbpfvcH72q0i4qNP6rpyL9KfF8O0hxsZJZcj1g4UrzGks", "salt": "EzXP1-XWwUUokm1Gidi4Aw", "iv": "K79Mk-gp5Egp3NrD", "wrapped": "WbRc5ec4qmRAXJV87jO_EQh6t5n4I_0k9aMTjvoDt1ecx8085ZNqzzkaU5IkTl6iedDBxORgp0B7xP3mF0tRqsoNFWn3E4GUbXR8jVlKTXpC1zeNM7p1EQKigNxnMv2RCh4mTW6s4tbpA8MkTDwFqDfw6xj8D3DCcxT3qerJNDHoRXe6OkhTBvEik0PBxyassFYJzjs0PsF7jg"};
+const PINNED_PUB = PINNED_INFO.pub;
+const PBKDF2_ITER = 250000;
+const LS_NAME = 'ctac-hoten';
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = n => String(n).padStart(2, '0');
+const fmtTime = t => { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`; };
+const dayKey = t => { const d = new Date(t); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+const mapLink = (lat, lng) => `https://www.google.com/maps?q=${lat},${lng}`;
+
+/* Điểm mốc tính khoảng cách: Viettel, 267 Ngô Thời Nhậm, Phường Cao Lãnh, Đồng Tháp
+   (Google Maps Plus Code FJ5Q+WX Cao Lãnh). */
+const MOC = { ten: 'Viettel 267 Ngô Thời Nhậm', lat: 10.459813, lng: 105.639938 };
+const KC_LABEL = 'Khoảng cách tính từ Công ty';
+function kcMet(lat, lng) {                       // khoảng cách đường chim bay (Haversine), mét
+  const R = 6371000, r = x => x * Math.PI / 180;
+  const a = Math.sin(r(lat - MOC.lat) / 2) ** 2 + Math.cos(r(MOC.lat)) * Math.cos(r(lat)) * Math.sin(r(lng - MOC.lng) / 2) ** 2;
+  return Math.round(2 * R * Math.asin(Math.sqrt(a)));
+}
+const fmtKc = m => m < 1000 ? `${m} m` : `${(m / 1000).toFixed(m < 10000 ? 2 : 1).replace('.', ',')} km`;
+const dirLink = (lat, lng) => `https://www.google.com/maps/dir/?api=1&origin=${MOC.lat},${MOC.lng}&destination=${lat},${lng}`;
+const lsGet = k => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+
+/* ---------- base64url ---------- */
+function b64u(buf) {
+  const b = new Uint8Array(buf); let s = '';
+  for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function ub64(s) {
+  s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '=';
+  const bin = atob(s), out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+const enc = new TextEncoder(), dec = new TextDecoder();
+const subtle = () => { if (!window.crypto?.subtle) throw new Error('Trình duyệt không hỗ trợ mã hoá — hãy mở bằng link https'); return crypto.subtle; };
+const EC = { name: 'ECDH', namedCurve: 'P-256' };
+
+/* ---------- Firebase ---------- */
+async function fb(method, path, body) {
+  const r = await fetch(`${BASE}${path}.json`, { method, cache: 'no-store',
+    headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+  if (!r.ok) throw new Error('Máy chủ trả lỗi ' + r.status);
+  return r.json();
+}
+
+/* ---------- khoá ---------- */
+async function pwKey(pw, salt) {
+  const base = await subtle().importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveKey']);
+  return subtle().deriveKey({ name: 'PBKDF2', salt, iterations: PBKDF2_ITER, hash: 'SHA-256' },
+    base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+async function wrapPriv(pkcs8, pw) {
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await subtle().encrypt({ name: 'AES-GCM', iv }, await pwKey(pw, salt), pkcs8);
+  return { salt: b64u(salt), iv: b64u(iv), wrapped: b64u(ct) };
+}
+async function unwrapPriv(info, pw) {
+  let pkcs8;
+  try { pkcs8 = await subtle().decrypt({ name: 'AES-GCM', iv: ub64(info.iv) }, await pwKey(pw, ub64(info.salt)), ub64(info.wrapped)); }
+  catch { throw new Error('Sai mật khẩu'); }
+  return subtle().importKey('pkcs8', pkcs8, EC, false, ['deriveKey']);
+}
+async function getPub() {
+  if (PINNED_PUB && !CODE_Q) return PINNED_PUB;
+  const info = await fb('GET', '/info');
+  if (!info?.pub) throw new Error('HCNS chưa thiết lập mật khẩu — chưa nhận checkin được');
+  return info.pub;
+}
+/* mã hoá cho HCNS: khoá tạm (ECDH) + AES-GCM */
+async function sealFor(pubB64, parts) {
+  const pub = await subtle().importKey('raw', ub64(pubB64), EC, false, []);
+  const eph = await subtle().generateKey(EC, true, ['deriveKey']);
+  const key = await subtle().deriveKey({ name: 'ECDH', public: pub }, eph.privateKey, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+  const epk = b64u(await subtle().exportKey('raw', eph.publicKey));
+  const out = [];
+  for (const p of parts) {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    out.push({ iv: b64u(iv), ct: b64u(await subtle().encrypt({ name: 'AES-GCM', iv }, key, enc.encode(JSON.stringify(p)))) });
+  }
+  return { epk, out };
+}
+async function openKey(priv, epk) {
+  const pub = await subtle().importKey('raw', ub64(epk), EC, false, []);
+  return subtle().deriveKey({ name: 'ECDH', public: pub }, priv, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+}
+async function openPart(key, { iv, ct }) {
+  return JSON.parse(dec.decode(await subtle().decrypt({ name: 'AES-GCM', iv: ub64(iv) }, key, ub64(ct))));
+}
+
+/* ---------- điều hướng ---------- */
+function go(id) {
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === id));
+  if (id === 'v-staff') enterStaff(); else stopCam();     // rời màn checkin thì tắt camera
+  if (id === 'v-login') enterLogin();
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => go(b.dataset.go)));
+if (!window.isSecureContext) $('#ctx-warn').textContent = 'Trang đang mở không qua https: định vị, camera và mã hoá sẽ không chạy. Hãy mở bằng link https.';
+
+/* ======================= CÁN BỘ ======================= */
+/* Danh sách cán bộ (theo bảng phân công người dùng gửi 09/11/2026) */
+const DS = [
+  { ten: 'Nguyễn Văn Phương',  chucDanh: 'PGĐ',           phong: 'Ban lãnh đạo', khuVuc: 'Phụ trách Phòng 1, Phòng 3', bld: '' },
+  { ten: 'Nguyễn Minh Trí',    chucDanh: 'PGĐ Phòng KD1', phong: 'Phòng 1', khuVuc: 'Ban Cao Lãnh - Lấp Vò', bld: 'Nguyễn Văn Phương PGĐ' },
+  { ten: 'Lê Thanh Cường',     chucDanh: 'PTKD KV',       phong: 'Phòng 1', khuVuc: 'VPKV Thanh Bình',       bld: 'Nguyễn Văn Phương PGĐ' },
+  { ten: 'Lê Nguyễn Anh Tuấn', chucDanh: 'PTKD KV',       phong: 'Phòng 2', khuVuc: 'VPKV Sa Đéc',           bld: 'Trần Minh Thi PGĐ' },
+  { ten: 'Trần Minh Thi',      chucDanh: 'PGĐ',           phong: 'Phòng 2', khuVuc: 'VPKV Tháp Mười',        bld: 'Trần Minh Thi PGĐ' },
+  { ten: 'Trần Quang Vinh',    chucDanh: 'PGĐ Phòng KD3', phong: 'Phòng 3', khuVuc: 'VPKV Hồng Ngự',         bld: 'Nguyễn Văn Phương PGĐ' },
+  { ten: 'Huỳnh Tuấn Anh',     chucDanh: 'PTKD KV',       phong: 'Phòng 3', khuVuc: 'VPKV Tân Hồng',         bld: 'Nguyễn Văn Phương PGĐ' },
+];
+const PHONGS = [...new Set(DS.map(x => x.phong))];
+
+const nameEl = $('#s-name'), noteEl = $('#s-note');
+let geo = null, geoBusy = false, photoFile = null, sending = false;
+
+nameEl.innerHTML = '<option value="">— Chọn tên của bạn —</option>' + PHONGS.map(p =>
+  `<optgroup label="${esc(p)}">${DS.map((x, i) => x.phong === p ? `<option value="${i}">${esc(x.ten)} — ${esc(x.chucDanh)}</option>` : '').join('')}</optgroup>`).join('');
+$('#f-phong').innerHTML += PHONGS.map(p => `<option>${esc(p)}</option>`).join('');
+const canBo = () => DS[nameEl.value] || null;
+function showInfo() {
+  const cb = canBo(), box = $('#s-info');
+  box.style.display = cb ? '' : 'none';
+  if (cb) box.innerHTML = `${esc(cb.phong)} · ${esc(cb.khuVuc)}<br>Chức danh: <b>${esc(cb.chucDanh)}</b>${cb.bld ? `<br>BLĐ phụ trách: ${esc(cb.bld)}` : ''}`;
+}
+nameEl.addEventListener('change', () => { showInfo(); sMsg(''); });
+{ const i = DS.findIndex(x => x.ten === lsGet(LS_NAME)); if (i >= 0) nameEl.value = i; showInfo(); }
+
+function enterStaff() { if (!geo || Date.now() - geo.t > 5 * 60e3) getGeo(); }
+
+function renderGeo(html, cls) { const b = $('#geo-box'); b.className = 'box ' + (cls || ''); b.innerHTML = html; }
+function getGeo() {
+  return new Promise(resolve => {
+    if (!navigator.geolocation) { renderGeo('Thiết bị không hỗ trợ định vị.', 'err'); return resolve(null); }
+    geoBusy = true; renderGeo('Đang lấy vị trí… (nếu máy hỏi, hãy bấm <b>Cho phép</b>)', 'muted');
+    navigator.geolocation.getCurrentPosition(p => {
+      geoBusy = false;
+      geo = { lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6), acc: Math.round(p.coords.accuracy), t: Date.now() };
+      geo.kc = kcMet(geo.lat, geo.lng);
+      const warn = geo.acc > 200 ? `<br><span class="warn">Sai số lớn (±${geo.acc} m) — nên bật GPS / ra chỗ thoáng rồi bấm "Lấy lại vị trí".</span>` : '';
+      renderGeo(`📍 ${geo.lat}, ${geo.lng} <span class="muted">(±${geo.acc} m)</span> · <a href="${mapLink(geo.lat, geo.lng)}" target="_blank" rel="noopener">Xem trên Google Maps</a>
+        <br>📏 ${KC_LABEL}: <b>${fmtKc(geo.kc)}</b> <span class="muted">(đường chim bay)</span>${warn}`, 'ok');
+      resolve(geo);
+    }, e => {
+      geoBusy = false; geo = null;
+      const why = e.code === 1
+        ? 'Bạn đã <b>chặn quyền vị trí</b>. Mở cài đặt trình duyệt → Quyền của trang → Vị trí → Cho phép, rồi bấm "Lấy lại vị trí".'
+        : e.code === 3 ? 'Hết thời gian chờ định vị. Bật GPS / Dịch vụ định vị rồi thử lại.'
+        : 'Không lấy được vị trí. Bật GPS / Dịch vụ định vị rồi thử lại.';
+      renderGeo('⚠️ ' + why + '<br><b>Bắt buộc có vị trí mới gửi được checkin.</b>', 'err');
+      resolve(null);
+    }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+  });
+}
+$('#geo-btn').addEventListener('click', getGeo);
+
+/* ---------- camera trực tiếp (điện thoại hoặc máy tính) — không cho chọn ảnh có sẵn ---------- */
+const camView = $('.cam-view'), video = $('#cam-video'), shot = $('#cam-shot');
+let stream = null, facing = 'user';
+const camBtns = (open, snap, flip, retake) => {
+  $('#cam-open').style.display = open ? '' : 'none'; $('#cam-snap').style.display = snap ? '' : 'none';
+  $('#cam-flip').style.display = flip ? '' : 'none'; $('#cam-retake').style.display = retake ? '' : 'none';
+};
+const camMsg = (html, cls) => { const m = $('#cam-msg'); m.className = 'msg ' + (cls || ''); m.innerHTML = html; };
+function stopCam() { if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; video.srcObject = null; camView.classList.remove('live'); }
+async function openCam() {
+  stopCam(); camMsg('Đang mở camera… (nếu máy hỏi, hãy bấm <b>Cho phép</b>)', 'muted');
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error(), { name: 'NoSupport' });
+    stream = await navigator.mediaDevices.getUserMedia({ audio: false,
+      video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 960 } } });
+    video.srcObject = stream; await video.play();
+    photoFile = null; camView.classList.remove('shot'); camView.classList.add('live');
+    camView.classList.toggle('mirror', facing === 'user');
+    const many = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput').length > 1;
+    camBtns(false, true, many, false); camMsg('');
+  } catch (e) {
+    stopCam(); camBtns(true, false, false, false);
+    camMsg('⚠️ ' + (e.name === 'NotAllowedError' ? 'Bạn đã <b>chặn quyền camera</b>. Mở cài đặt trình duyệt → Quyền của trang → Camera → Cho phép, rồi bấm "Mở camera".'
+      : e.name === 'NotFoundError' || e.name === 'OverconstrainedError' ? 'Không tìm thấy camera trên thiết bị này.'
+      : e.name === 'NotReadableError' ? 'Camera đang được ứng dụng khác dùng. Tắt ứng dụng đó rồi thử lại.'
+      : e.name === 'NoSupport' ? 'Trình duyệt không hỗ trợ camera — hãy mở bằng link https trên Chrome/Safari.'
+      : 'Không mở được camera (' + esc(e.message || e.name) + ').') + '<br><b>Bắt buộc chụp ảnh mới gửi được checkin.</b>', 'err');
+  }
+}
+function snap() {
+  if (!stream || !video.videoWidth) return;
+  shot.width = video.videoWidth; shot.height = video.videoHeight;
+  // lưu ảnh đúng chiều thật (không lật gương) để chữ trên biển hiệu đọc được; chỉ khung xem trước là lật như gương
+  shot.getContext('2d').drawImage(video, 0, 0);
+  photoFile = shot; photoTakenAt = Date.now();
+  stopCam(); camView.classList.add('shot'); camBtns(false, false, false, true);
+  camMsg('✓ Đã chụp ảnh.', 'ok');
+}
+let photoTakenAt = 0;
+$('#cam-open').addEventListener('click', openCam);
+$('#cam-snap').addEventListener('click', snap);
+$('#cam-retake').addEventListener('click', openCam);
+$('#cam-flip').addEventListener('click', () => { facing = facing === 'user' ? 'environment' : 'user'; openCam(); });
+function resetCam() { stopCam(); photoFile = null; camView.classList.remove('shot', 'live'); camBtns(true, false, false, false); camMsg(''); }
+
+/* thu nhỏ ảnh + đóng dấu tên, giờ, toạ độ lên ảnh */
+async function makeImages(file, stamp) {
+  const img = await createImageBitmap(file);
+  const draw = (max, q, withStamp) => {
+    const s = Math.min(1, max / Math.max(img.width, img.height));
+    const w = Math.round(img.width * s), h = Math.round(img.height * s);
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d'); g.drawImage(img, 0, 0, w, h);
+    if (withStamp) {            // khung thông tin + toạ độ ở góc dưới bên phải, chữ canh phải
+      const fs = Math.max(11, Math.round(w / 40)), lh = fs * 1.3, pad = fs * .6, m = Math.round(fs * .6);
+      g.font = `bold ${fs}px Arial`;
+      const boxW = Math.min(Math.max(...stamp.map(t => g.measureText(t).width)) + pad * 2, w - m * 2);
+      const boxH = lh * stamp.length + pad * 2 - (lh - fs);
+      const x = w - m - boxW, y = h - m - boxH;
+      g.fillStyle = 'rgba(0,0,0,.6)';
+      if (g.roundRect) { g.beginPath(); g.roundRect(x, y, boxW, boxH, fs * .4); g.fill(); } else g.fillRect(x, y, boxW, boxH);
+      g.fillStyle = '#fff'; g.textAlign = 'right'; g.textBaseline = 'top';
+      stamp.forEach((line, i) => g.fillText(line, w - m - pad, y + pad + i * lh, boxW - pad * 2));
+    }
+    return c.toDataURL('image/jpeg', q);
+  };
+  return { full: draw(1280, .75, true), thumb: draw(360, .6, true) };
+}
+
+function sMsg(html, cls) { const m = $('#s-msg'); m.className = 'msg ' + (cls || ''); m.innerHTML = html; }
+
+$('#s-submit').addEventListener('click', async () => {
+  if (sending) return;
+  const cb = canBo();
+  if (!cb) return sMsg('Vui lòng chọn tên của bạn.', 'err'), nameEl.focus();
+  if (!photoFile) return sMsg('Vui lòng mở camera và chụp ảnh checkin.', 'err');
+  if (Date.now() - photoTakenAt > 10 * 60e3) { resetCam(); return sMsg('Ảnh đã chụp quá 10 phút — vui lòng chụp lại.', 'err'); }
+  sending = true; const btn = $('#s-submit'); btn.disabled = true;
+  try {
+    if (!geo || Date.now() - geo.t > 5 * 60e3) { sMsg('Đang cập nhật vị trí…', 'muted'); await getGeo(); }
+    if (!geo) throw new Error('Chưa có vị trí — bắt buộc bật định vị');
+    sMsg('Đang xử lý ảnh…', 'muted');
+    const now = Date.now();
+    const meta = { hoTen: cb.ten, chucDanh: cb.chucDanh, phong: cb.phong, khuVuc: cb.khuVuc, bld: cb.bld,
+                   donVi: `${cb.phong} · ${cb.khuVuc}`, noiDung: noteEl.value.trim(),
+                   lat: geo.lat, lng: geo.lng, acc: geo.acc, kc: geo.kc, viTriLuc: geo.t, mayLuc: now,
+                   thietBi: navigator.userAgent.slice(0, 160) };
+    const imgs = await makeImages(photoFile, [
+      `${meta.hoTen} · ${meta.chucDanh}`, `${meta.donVi} · ${fmtTime(now)}`,
+      `${KC_LABEL}: ${fmtKc(geo.kc)}`, `📍 ${geo.lat}, ${geo.lng} (±${geo.acc} m)` ]);
+    meta.anhNho = imgs.thumb;
+    sMsg('Đang mã hoá và gửi…', 'muted');
+    const { epk, out } = await sealFor(await getPub(), [meta, { anh: imgs.full }]);
+    const id = 'c' + now.toString(36) + b64u(crypto.getRandomValues(new Uint8Array(4)));
+    await fb('PATCH', '', {
+      [`r/${id}`]: { at: { '.sv': 'timestamp' }, epk, iv: out[0].iv, ct: out[0].ct },
+      [`p/${id}`]: { iv: out[1].iv, ct: out[1].ct }
+    });
+    lsSet(LS_NAME, meta.hoTen);
+    $('#done-sum').innerHTML = `<b>${esc(meta.hoTen)}</b> · ${esc(meta.chucDanh)}<br>${esc(meta.donVi)}<br>${fmtTime(now)}<br>
+      📍 <a href="${mapLink(geo.lat, geo.lng)}" target="_blank" rel="noopener">${geo.lat}, ${geo.lng}</a> (±${geo.acc} m)<br>📏 ${KC_LABEL}: <b>${fmtKc(geo.kc)}</b>`;
+    noteEl.value = ''; resetCam(); sMsg('');
+    go('v-done');
+  } catch (e) {
+    sMsg('⚠️ ' + esc(navigator.onLine ? e.message : 'Mất mạng — có mạng lại thì bấm Gửi checkin.'), 'err');
+  } finally { sending = false; btn.disabled = false; }
+});
+$('#again').addEventListener('click', () => go('v-staff'));
+
+/* ======================= HCNS ======================= */
+let info = null, priv = null, rows = [];
+
+async function enterLogin() {
+  $('#pw1').value = ''; $('#pw2').value = ''; lMsg('');
+  $('#login-btn').disabled = true;
+  try {
+    info = await fb('GET', '/info');
+    const pinned = !CODE_Q && PINNED_INFO;
+    if (pinned && info?.pub !== PINNED_INFO.pub) {          // Firebase mất / bị tráo khoá → dùng bản dự phòng
+      lMsg('⚠️ Khoá trên máy chủ bị xoá hoặc không khớp — đang dùng bản dự phòng trong trang.', 'warn');
+      info = { ...PINNED_INFO };
+    }
+    const setup = !info?.pub;
+    $('#login-title').textContent = setup ? 'HCNS — đặt mật khẩu lần đầu' : 'HCNS — nhập mật khẩu';
+    $('#login-sub').textContent = setup ? 'Chưa có mật khẩu. Mật khẩu này dùng để xem toàn bộ checkin; quên mật khẩu thì không xem lại được dữ liệu cũ.' : '';
+    $('#pw2-wrap').style.display = setup ? '' : 'none';
+    $('#login-btn').textContent = setup ? 'Đặt mật khẩu' : 'Vào theo dõi';
+  } catch (e) { lMsg('Không kết nối được máy chủ: ' + esc(e.message), 'err'); }
+  $('#login-btn').disabled = false; $('#pw1').focus();
+}
+function lMsg(html, cls) { const m = $('#login-msg'); m.className = 'msg ' + (cls || ''); m.innerHTML = html; }
+
+async function doLogin() {
+  const pw = $('#pw1').value, btn = $('#login-btn');
+  if (!pw) return lMsg('Nhập mật khẩu.', 'err');
+  btn.disabled = true;
+  try {
+    if (!info?.pub) {                                      // thiết lập lần đầu
+      if (pw.length < 6) throw new Error('Mật khẩu tối thiểu 6 ký tự');
+      if (pw !== $('#pw2').value) throw new Error('Hai lần nhập mật khẩu không khớp');
+      lMsg('Đang tạo khoá…', 'muted');
+      const kp = await subtle().generateKey(EC, true, ['deriveKey']);
+      const pub = b64u(await subtle().exportKey('raw', kp.publicKey));
+      const w = await wrapPriv(await subtle().exportKey('pkcs8', kp.privateKey), pw);
+      const cur = await fb('GET', '/info');                // tránh ghi đè nếu máy khác vừa đặt
+      if (cur?.pub) throw new Error('Mật khẩu vừa được đặt ở máy khác — tải lại trang');
+      info = { v: 1, pub, ...w, taoLuc: { '.sv': 'timestamp' } };
+      await fb('PUT', '/info', info);
+    }
+    lMsg('Đang mở khoá…', 'muted');
+    priv = await unwrapPriv(info, pw);
+    $('#pw1').value = ''; $('#pw2').value = ''; lMsg('');
+    go('v-dash'); loadDash();
+  } catch (e) { lMsg('⚠️ ' + esc(e.message), 'err'); }
+  btn.disabled = false;
+}
+$('#login-btn').addEventListener('click', doLogin);
+['#pw1', '#pw2'].forEach(s => $(s).addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) doLogin(); }));
+
+async function loadDash() {
+  $('#d-stat').textContent = 'Đang tải…';
+  try {
+    const raw = await fb('GET', '/r') || {};
+    const list = [];
+    for (const [id, r] of Object.entries(raw)) {
+      try { const key = await openKey(priv, r.epk); list.push({ id, at: r.at, key, ...(await openPart(key, r)) }); }
+      catch { list.push({ id, at: r.at, bad: true }); }
+    }
+    rows = list.sort((a, b) => (b.at || 0) - (a.at || 0));
+    renderDash();
+  } catch (e) { $('#d-stat').innerHTML = `<span class="err">Không tải được: ${esc(e.message)}</span>`; }
+}
+function filtered() {
+  const d = $('#f-date').value, p = $('#f-phong').value, q = $('#f-q').value.trim().toLowerCase();
+  return rows.filter(r => (!d || dayKey(r.at) === d) && (!p || r.phong === p) &&
+    (!q || `${r.hoTen} ${r.chucDanh} ${r.donVi} ${r.noiDung}`.toLowerCase().includes(q)));
+}
+function renderDash() {
+  const list = filtered(), people = new Set(list.filter(r => !r.bad).map(r => r.hoTen));
+  const d = $('#f-date').value, p = $('#f-phong').value;
+  const scope = DS.filter(x => !p || x.phong === p);
+  const chua = d ? scope.filter(x => !people.has(x.ten)).map(x => x.ten) : [];
+  $('#d-stat').innerHTML = `${list.length} lượt checkin · ${people.size} người` +
+    (d ? ` · ngày ${d.split('-').reverse().join('/')} · <b>${scope.length - chua.length}/${scope.length}</b> cán bộ đã checkin` +
+         (chua.length ? `<br><span class="warn">Chưa checkin: ${chua.map(esc).join(', ')}</span>` : ' <span class="ok">✓ đủ</span>')
+       : ' · tất cả các ngày');
+  $('#d-grid').innerHTML = list.map(r => r.bad
+    ? `<div class="card"><div class="bd err">Lượt checkin không giải mã được (${fmtTime(r.at)})</div></div>`
+    : `<div class="card">
+        <img class="ph" src="${r.anhNho}" data-id="${r.id}" alt="Ảnh checkin ${esc(r.hoTen)}" title="Bấm xem ảnh lớn">
+        <div class="bd">
+          <div class="nm">${esc(r.hoTen)}${r.chucDanh ? ` <span class="muted" style="font-weight:normal">· ${esc(r.chucDanh)}</span>` : ''}</div>
+          <div class="muted">${esc(r.donVi)}</div>
+          <div>🕒 ${fmtTime(r.at)}</div>
+          <div>📍 <a href="${mapLink(r.lat, r.lng)}" target="_blank" rel="noopener">${r.lat}, ${r.lng}</a> <span class="${r.acc > 200 ? 'warn' : 'muted'}">±${r.acc} m</span></div>
+          <div>📏 ${KC_LABEL}: <b>${fmtKc(r.kc ?? kcMet(r.lat, r.lng))}</b> · <a href="${dirLink(r.lat, r.lng)}" target="_blank" rel="noopener">Chỉ đường</a></div>
+          ${r.noiDung ? `<div>📝 ${esc(r.noiDung)}</div>` : ''}
+          ${Math.abs(r.mayLuc - r.at) > 10 * 60e3 ? `<div class="warn">Giờ trên máy lệch ${Math.round(Math.abs(r.mayLuc - r.at) / 60e3)} phút</div>` : ''}
+        </div></div>`).join('') || '<div class="muted">Không có lượt checkin nào.</div>';
+}
+$('#f-date').addEventListener('change', renderDash);
+$('#f-phong').addEventListener('change', renderDash);
+$('#f-date').value = dayKey(Date.now());          // mặc định xem hôm nay
+$('#f-q').addEventListener('input', renderDash);
+$('#d-reload').addEventListener('click', loadDash);
+$('#d-out').addEventListener('click', () => { priv = null; rows = []; $('#d-grid').innerHTML = ''; go('v-home'); });
+
+// xem ảnh lớn (tải khi bấm)
+$('#d-grid').addEventListener('click', async e => {
+  const el = e.target.closest('.ph'); if (!el) return;
+  const r = rows.find(x => x.id === el.dataset.id); if (!r) return;
+  const lb = $('#lightbox'), im = lb.querySelector('img');
+  im.src = r.anhNho; lb.style.display = 'flex';
+  try { if (!r.anh) r.anh = (await openPart(r.key, await fb('GET', `/p/${r.id}`))).anh; im.src = r.anh; } catch {}
+});
+$('#lightbox').addEventListener('click', () => $('#lightbox').style.display = 'none');
+
+// xuất Excel .xlsx có cột ảnh checkin (thư viện ExcelJS, chỉ tải khi bấm nút)
+const EXCELJS_URL = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+let excelLib = null;
+function loadExcelJS() {
+  return excelLib ||= new Promise((ok, fail) => {
+    const s = document.createElement('script'); s.src = EXCELJS_URL;
+    s.onload = () => ok(window.ExcelJS); s.onerror = () => { excelLib = null; fail(new Error('Không tải được thư viện Excel (kiểm tra mạng)')); };
+    document.head.appendChild(s);
+  });
+}
+const imgSize = src => new Promise(ok => { const i = new Image(); i.onload = () => ok([i.naturalWidth, i.naturalHeight]); i.onerror = () => ok([4, 3]); i.src = src; });
+
+$('#d-csv').addEventListener('click', async () => {
+  const btn = $('#d-csv'), label = btn.textContent, list = filtered().filter(r => !r.bad);
+  if (!list.length) return alert('Không có lượt checkin nào để xuất.');
+  btn.disabled = true;
+  try {
+    btn.textContent = 'Đang chuẩn bị…';
+    const ExcelJS = await loadExcelJS();
+    const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('Checkin công tác', { views: [{ state: 'frozen', ySplit: 1 }] });
+    const IMG_W = 240;                                   // bề rộng ảnh trong ô (px)
+    ws.columns = [
+      { header: 'STT', width: 5 }, { header: 'Ảnh checkin', width: 35 },
+      { header: 'Họ tên', width: 22 }, { header: 'Chức danh', width: 15 }, { header: 'Phòng', width: 13 },
+      { header: 'Khu vực', width: 22 }, { header: 'BLĐ phụ trách', width: 22 }, { header: 'Nội dung công tác', width: 30 },
+      { header: 'Thời gian checkin', width: 17 }, { header: 'Vĩ độ', width: 11 }, { header: 'Kinh độ', width: 12 },
+      { header: 'Sai số (m)', width: 9 }, { header: `${KC_LABEL} (km)`, width: 16 }, { header: 'Google Maps', width: 14 } ];
+    const head = ws.getRow(1);
+    head.font = { bold: true, color: { argb: 'FFFFFFFF' } }; head.height = 32;
+    head.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    head.eachCell(c => c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF388087' } });
+    const border = { style: 'thin', color: { argb: 'FFBFBFBF' } };
+
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      btn.textContent = `Đang tải ảnh ${i + 1}/${list.length}…`;
+      let src = r.anhNho;
+      try { if (!r.anh) r.anh = (await openPart(r.key, await fb('GET', `/p/${r.id}`))).anh; src = r.anh; } catch {}
+      const [iw, ih] = await imgSize(src), imgH = Math.round(IMG_W * ih / iw);
+      const row = ws.addRow([i + 1, '', r.hoTen, r.chucDanh, r.phong, r.khuVuc, r.bld, r.noiDung, fmtTime(r.at),
+        r.lat, r.lng, r.acc, +((r.kc ?? kcMet(r.lat, r.lng)) / 1000).toFixed(2),
+        { text: 'Xem bản đồ', hyperlink: mapLink(r.lat, r.lng) }]);
+      row.height = (imgH + 10) * 0.75;                    // điểm (pt) = px × 0.75
+      row.alignment = { vertical: 'middle', wrapText: true };
+      row.getCell(14).font = { color: { argb: 'FF0563C1' }, underline: true };
+      row.eachCell({ includeEmpty: true }, c => c.border = { top: border, left: border, bottom: border, right: border });
+      const id = wb.addImage({ base64: src, extension: 'jpeg' });
+      ws.addImage(id, { tl: { col: 1.04, row: row.number - 1 + 0.03 }, ext: { width: IMG_W, height: imgH }, editAs: 'oneCell' });
+    }
+    btn.textContent = 'Đang tạo file…';
+    const buf = await wb.xlsx.writeBuffer();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    a.download = `checkin-cong-tac-${$('#f-date').value || 'tat-ca'}.xlsx`; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+  } catch (e) { alert('Không xuất được Excel: ' + e.message); }
+  btn.disabled = false; btn.textContent = label;
+});
+
+// đổi mật khẩu: khoá lại khoá bí mật bằng mật khẩu mới
+$('#d-pw').addEventListener('click', async () => {
+  const oldPw = prompt('Mật khẩu hiện tại:'); if (!oldPw) return;
+  const newPw = prompt('Mật khẩu mới (tối thiểu 6 ký tự):'); if (!newPw) return;
+  if (newPw.length < 6) return alert('Mật khẩu tối thiểu 6 ký tự.');
+  if (prompt('Nhập lại mật khẩu mới:') !== newPw) return alert('Hai lần nhập không khớp.');
+  try {
+    const cur = await fb('GET', '/info');
+    const salt = ub64(cur.salt);
+    const pkcs8 = await subtle().decrypt({ name: 'AES-GCM', iv: ub64(cur.iv) }, await pwKey(oldPw, salt), ub64(cur.wrapped))
+      .catch(() => { throw new Error('Sai mật khẩu hiện tại'); });
+    info = { ...cur, ...(await wrapPriv(pkcs8, newPw)) };
+    await fb('PUT', '/info', info);
+    alert('Đã đổi mật khẩu.');
+  } catch (e) { alert('Không đổi được: ' + e.message); }
+});
+
+/* mở thẳng vai trò bằng đường dẫn …#canbo hoặc …#hcns */
+go(location.hash === '#canbo' ? 'v-staff' : location.hash === '#hcns' ? 'v-login' : 'v-home');
+</script>
+</body>
+</html>
