@@ -167,6 +167,7 @@
       <input type="month" id="f-month" title="Chọn tháng" style="display:none">
       <button class="sec nav" id="d-next" title="Kỳ sau">›</button>
       <select id="f-phong"><option value="">Tất cả phòng</option></select>
+      <select id="f-cb"><option value="">Tất cả cán bộ</option></select>
       <input type="search" id="f-q" placeholder="Tìm tên, khu vực…">
       <button class="sec" id="d-reload">Tải lại</button>
       <button class="sec" id="d-csv">Tải Excel (có ảnh)</button>
@@ -320,6 +321,7 @@ let geo = null, geoBusy = false, photoFile = null, sending = false;
 nameEl.innerHTML = '<option value="">— Chọn tên của bạn —</option>' + PHONGS.map(p =>
   `<optgroup label="${esc(p)}">${DS.map((x, i) => x.phong === p ? `<option value="${i}">${esc(x.ten)} — ${esc(x.chucDanh)}</option>` : '').join('')}</optgroup>`).join('');
 $('#f-phong').innerHTML += PHONGS.map(p => `<option>${esc(p)}</option>`).join('');
+$('#f-cb').innerHTML += DS.map(x => `<option value="${esc(x.ten)}">${esc(x.ten)}</option>`).join('');
 const canBo = () => DS[nameEl.value] || null;
 function showInfo() {
   const cb = canBo(), box = $('#s-info');
@@ -569,8 +571,9 @@ function shiftKy(n) {
   renderDash();
 }
 function filtered() {
-  const per = period(), p = $('#f-phong').value, q = $('#f-q').value.trim().toLowerCase();
+  const per = period(), p = $('#f-phong').value, cb = $('#f-cb').value, q = $('#f-q').value.trim().toLowerCase();
   return rows.filter(r => (!per.from || (r.at >= per.from && r.at < per.to)) && (r.bad || !p || r.phong === p) &&
+    (r.bad || !cb || r.hoTen === cb) &&
     (!q || r.bad || `${r.hoTen} ${r.chucDanh} ${r.donVi} ${r.noiDung}`.toLowerCase().includes(q)));
 }
 function renderDash() {
@@ -606,6 +609,7 @@ $('#f-ky').addEventListener('change', renderDash);
 $('#d-prev').addEventListener('click', () => shiftKy(-1));
 $('#d-next').addEventListener('click', () => shiftKy(1));
 $('#f-phong').addEventListener('change', renderDash);
+$('#f-cb').addEventListener('change', renderDash);
 $('#f-date').value = dayKey(Date.now());          // mặc định xem hôm nay
 $('#f-month').value = dayKey(Date.now()).slice(0, 7);
 
@@ -708,9 +712,11 @@ $('#d-csv').addEventListener('click', async () => {
     const title = per.ky === 'thang' ? `BÁO CÁO CÔNG TÁC THÁNG ${per.key.split('-').reverse().join('/')} – CÁN BỘ CÔNG TY`
       : per.ky === 'tatca' ? 'BÁO CÁO CÔNG TÁC – CÁN BỘ CÔNG TY'
       : `BÁO CÁO CÔNG TÁC ${per.label.toUpperCase()} – CÁN BỘ CÔNG TY`;
+    const cbSel = $('#f-cb').value;
+    const titleFull = cbSel ? `${title} · ${cbSel.toUpperCase()}` : title;
     ws.mergeCells(5, 1, 5, N);
     const t = ws.getCell(5, 1);
-    t.value = title; t.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    t.value = titleFull; t.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
     font(t, { bold: true }); ws.getRow(5).height = 26;
 
     // tiêu đề cột
@@ -760,7 +766,8 @@ $('#d-csv').addEventListener('click', async () => {
     const buf = await wb.xlsx.writeBuffer();
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
-    a.download = `bao-cao-cong-tac-${period().key}.xlsx`; a.click();
+    const slug = cbSel ? '-' + cbSel.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[Đđ]/g, 'd').replace(/\s+/g, '-').toLowerCase() : '';
+    a.download = `bao-cao-cong-tac-${period().key}${slug}.xlsx`; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 30000);
   } catch (e) { alert('Không xuất được Excel: ' + e.message); }
   btn.disabled = false; btn.textContent = label;
