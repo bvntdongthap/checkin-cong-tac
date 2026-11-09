@@ -670,18 +670,42 @@ $('#d-csv').addEventListener('click', async () => {
   try {
     btn.textContent = 'Đang chuẩn bị…';
     const ExcelJS = await loadExcelJS();
-    const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('Checkin công tác', { views: [{ state: 'frozen', ySplit: 1 }] });
-    const IMG_W = 240;                                   // bề rộng ảnh trong ô (px)
-    ws.columns = [
-      { header: 'STT', width: 5 }, { header: 'Ảnh checkin', width: 35 },
-      { header: 'Họ tên', width: 22 }, { header: 'Chức danh', width: 15 }, { header: 'Phòng', width: 13 },
-      { header: 'Khu vực', width: 22 }, { header: 'BLĐ phụ trách', width: 22 }, { header: 'Nội dung công tác', width: 30 },
-      { header: 'Thời gian checkin', width: 17 }, { header: 'Vĩ độ', width: 11 }, { header: 'Kinh độ', width: 12 },
-      { header: 'Sai số (m)', width: 9 }, { header: `${KC_LABEL} (km)`, width: 16 }, { header: 'Google Maps', width: 14 } ];
-    const head = ws.getRow(1);
-    head.font = { bold: true, color: { argb: 'FFFFFFFF' } }; head.height = 32;
-    head.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-    head.eachCell(c => c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF388087' } });
+    const per = period(), FONT = 'Times New Roman', SZ = 13;
+    const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('Báo cáo công tác');
+    const IMG_W = 200;
+    const COLS = [['STT', 6], ['Ảnh checkin', 30], ['Họ tên', 20], ['Chức danh', 20], ['Phòng', 12], ['Khu vực', 22],
+      ['BLĐ phụ trách', 34], ['Nội dung công tác', 26], ['Thời gian checkin', 18], ['Vĩ độ', 11], ['Kinh độ', 12],
+      ['Sai số (m)', 10], [`${KC_LABEL} (km)`, 16], ['Google Maps', 14]];
+    const N = COLS.length, HR = 7;
+    ws.columns = COLS.map(([, w]) => ({ width: w }));
+    ws.views = [{ state: 'frozen', ySplit: HR }];
+    const font = (c, extra) => { c.font = { name: FONT, size: SZ, ...extra }; };
+
+    // khối công ty ở góc trên bên trái, canh giữa
+    ws.mergeCells(1, 1, 3, 4);
+    const co = ws.getCell(1, 1);
+    co.value = 'CÔNG TY BẢO VIỆT ĐỒNG THÁP';
+    co.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    font(co, { bold: true });
+
+    // tiêu đề căn giữa theo chiều rộng bảng
+    const title = per.ky === 'thang' ? `BÁO CÁO CÔNG TÁC THÁNG ${per.key.split('-').reverse().join('/')} – CÁN BỘ CÔNG TY`
+      : per.ky === 'tatca' ? 'BÁO CÁO CÔNG TÁC – CÁN BỘ CÔNG TY'
+      : `BÁO CÁO CÔNG TÁC ${per.label.toUpperCase()} – CÁN BỘ CÔNG TY`;
+    ws.mergeCells(5, 1, 5, N);
+    const t = ws.getCell(5, 1);
+    t.value = title; t.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    font(t, { bold: true }); ws.getRow(5).height = 26;
+
+    // tiêu đề cột
+    const head = ws.getRow(HR);
+    COLS.forEach(([h], i) => head.getCell(i + 1).value = h);
+    head.height = 36;
+    head.eachCell(c => {
+      c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF388087' } };
+      font(c, { bold: true, color: { argb: 'FFFFFFFF' } });
+    });
     const border = { style: 'thin', color: { argb: 'FFBFBFBF' } };
 
     for (let i = 0; i < list.length; i++) {
@@ -693,18 +717,35 @@ $('#d-csv').addEventListener('click', async () => {
       const row = ws.addRow([i + 1, '', r.hoTen, r.chucDanh, r.phong, r.khuVuc, r.bld, r.noiDung, fmtTime(r.at),
         r.lat, r.lng, r.acc, +((r.kc ?? kcMet(r.lat, r.lng)) / 1000).toFixed(2),
         { text: 'Xem bản đồ', hyperlink: mapLink(r.lat, r.lng) }]);
-      row.height = (imgH + 10) * 0.75;                    // điểm (pt) = px × 0.75
+      row.height = (imgH + 10) * 0.75;
       row.alignment = { vertical: 'middle', wrapText: true };
-      row.getCell(14).font = { color: { argb: 'FF0563C1' }, underline: true };
-      row.eachCell({ includeEmpty: true }, c => c.border = { top: border, left: border, bottom: border, right: border });
+      row.eachCell({ includeEmpty: true }, c => { c.border = { top: border, left: border, bottom: border, right: border }; font(c); });
+      row.getCell(N).font = { name: FONT, size: SZ, color: { argb: 'FF0563C1' }, underline: true };
       const id = wb.addImage({ base64: src, extension: 'jpeg' });
       ws.addImage(id, { tl: { col: 1.04, row: row.number - 1 + 0.03 }, ext: { width: IMG_W, height: imgH }, editAs: 'oneCell' });
     }
+
+    // khối ký tên ở cuối báo cáo, bên phải
+    const sig = ws.lastRow.number + 2, half = Math.floor(N / 2) + 1;
+    ws.mergeCells(sig, half - 1, sig, half + 1);
+    ws.mergeCells(sig, half + 2, sig, N);
+    const s1 = ws.getCell(sig, half - 1), s2 = ws.getCell(sig, half + 2);
+    s1.value = 'TP. HCNS'; s2.value = 'BLĐ';
+    [s1, s2].forEach(c => { c.alignment = { horizontal: 'center', vertical: 'top' }; font(c, { bold: true }); });
+    ws.mergeCells(sig + 1, half - 1, sig + 1, half + 1);
+    ws.mergeCells(sig + 1, half + 2, sig + 1, N);
+    [ws.getCell(sig + 1, half - 1), ws.getCell(sig + 1, half + 2)].forEach(c => {
+      c.value = '(Ký, ghi rõ họ tên)'; c.alignment = { horizontal: 'center', vertical: 'top' }; font(c, { italic: true });
+    });
+
+    // toàn bộ văn bản: Times New Roman 13 (giữ đậm/màu đã đặt)
+    ws.eachRow({ includeEmpty: false }, row => row.eachCell(c => { c.font = { ...(c.font || {}), name: FONT, size: SZ }; }));
+
     btn.textContent = 'Đang tạo file…';
     const buf = await wb.xlsx.writeBuffer();
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
-    a.download = `checkin-cong-tac-${period().key}.xlsx`; a.click();
+    a.download = `bao-cao-cong-tac-${period().key}.xlsx`; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 30000);
   } catch (e) { alert('Không xuất được Excel: ' + e.message); }
   btn.disabled = false; btn.textContent = label;
