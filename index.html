@@ -674,13 +674,16 @@ $('#d-csv').addEventListener('click', async () => {
     const ExcelJS = await loadExcelJS();
     const per = period(), FONT = 'Times New Roman', SZ = 13;
     const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('Báo cáo công tác');
-    const IMG_W = 200;
-    const COLS = [['STT', 6], ['Ảnh checkin', 30], ['Họ tên', 20], ['Chức danh', 20], ['Phòng', 12], ['Khu vực', 22],
-      ['BLĐ phụ trách', 34], ['Nội dung công tác', 26], ['Thời gian checkin', 18], ['Vĩ độ', 11], ['Kinh độ', 12],
-      ['Sai số (m)', 10], [`${KC_LABEL} (km)`, 16], ['Google Maps', 14]];
+    const IMG_W = 165;
+    const COLS = [['STT', 5], ['Ảnh checkin', 26], ['Họ tên', 18], ['Chức danh', 17], ['Phòng', 10], ['Khu vực', 18],
+      ['BLĐ phụ trách', 24], ['Nội dung công tác', 22], ['Thời gian checkin', 16], ['Vĩ độ', 10], ['Kinh độ', 11],
+      ['Sai số (m)', 8], [`${KC_LABEL} (km)`, 13], ['Google Maps', 11]];
     const N = COLS.length, HR = 7;
     ws.columns = COLS.map(([, w]) => ({ width: w }));
     ws.views = [{ state: 'frozen', ySplit: HR }];
+    // in ngang A4, vừa đúng chiều rộng trang, lặp tiêu đề cột khi sang trang
+    ws.pageSetup = { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0,
+      margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.3, footer: 0.3 }, printTitlesRow: `${HR}:${HR}` };
     const font = (c, extra) => { c.font = { name: FONT, size: SZ, ...extra }; };
 
     // logo góc trên bên trái; tên công ty canh giữa ngay dưới logo
@@ -737,18 +740,14 @@ $('#d-csv').addEventListener('click', async () => {
       ws.addImage(id, { tl: { col: 1.04, row: row.number - 1 + 0.03 }, ext: { width: IMG_W, height: imgH }, editAs: 'oneCell' });
     }
 
-    // khối ký tên ở cuối báo cáo, bên phải
-    const sig = ws.lastRow.number + 2, half = Math.floor(N / 2) + 1;
-    ws.mergeCells(sig, half - 1, sig, half + 1);
-    ws.mergeCells(sig, half + 2, sig, N);
-    const s1 = ws.getCell(sig, half - 1), s2 = ws.getCell(sig, half + 2);
-    s1.value = 'TP. HCNS'; s2.value = 'BLĐ';
-    [s1, s2].forEach(c => { c.alignment = { horizontal: 'center', vertical: 'top' }; font(c, { bold: true }); });
-    ws.mergeCells(sig + 1, half - 1, sig + 1, half + 1);
-    ws.mergeCells(sig + 1, half + 2, sig + 1, N);
-    [ws.getCell(sig + 1, half - 1), ws.getCell(sig + 1, half + 2)].forEach(c => {
-      c.value = '(Ký, ghi rõ họ tên)'; c.alignment = { horizontal: 'center', vertical: 'top' }; font(c, { italic: true });
+    // khối ký tên cuối báo cáo: Người lập (trái) · TP. HCNS (giữa) · BLĐ (phải)
+    const sig = ws.lastRow.number + 2;
+    [['Người lập', 1, 4], ['TP. HCNS', 7, 10], ['BLĐ', 11, N]].forEach(([t, a, b]) => {
+      ws.mergeCells(sig, a, sig, b); ws.mergeCells(sig + 1, a, sig + 1, b);
+      const c1 = ws.getCell(sig, a); c1.value = t; c1.alignment = { horizontal: 'center', vertical: 'top' }; font(c1, { bold: true });
+      const c2 = ws.getCell(sig + 1, a); c2.value = '(Ký, ghi rõ họ tên)'; c2.alignment = { horizontal: 'center', vertical: 'bottom' }; font(c2, { italic: true });
     });
+    ws.getRow(sig + 1).height = 50;                        // chỗ để ký
 
     // toàn bộ văn bản: Times New Roman 13 (giữ đậm/màu đã đặt)
     ws.eachRow({ includeEmpty: false }, row => row.eachCell(c => { c.font = { ...(c.font || {}), name: FONT, size: SZ }; }));
