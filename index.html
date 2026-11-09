@@ -737,7 +737,7 @@ $('#d-csv').addEventListener('click', async () => {
     // BLĐ phụ trách: Phó GĐ chỉ ghi GĐ Trần Anh Tú; các cán bộ khác ghi PGĐ (trên) và GĐ (dưới)
     const DS_BY = new Map(DS.map(x => [x.ten, x]));
     const blText = r => {
-      const d = DS_BY.get(r.hoTen), gd = 'Ông: GĐ Trần Anh Tú - GĐ Công Ty';
+      const d = DS_BY.get(r.hoTen), gd = 'Ông: Trần Anh Tú - GĐ Công Ty';
       if (d && d.chucDanh === 'Phó Giám Đốc Công Ty') return gd;
       const pgd = ((d && d.bld) || r.bld || '').split(' – ')[0].trim();
       return pgd ? `Ông: ${pgd} – PGĐ Công Ty\n${gd}` : gd;
