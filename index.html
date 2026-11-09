@@ -684,8 +684,8 @@ $('#d-csv').addEventListener('click', async () => {
     const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('Báo cáo công tác');
     const IMG_W = 165;
     const COLS = [['STT', 8], ['Ảnh checkin', 26], ['Họ tên', 18], ['Chức danh', 18], ['Phòng', 11], ['Khu vực', 18],
-      ['BLĐ phụ trách', 24], ['Nội dung công tác', 22], ['Thời gian checkin', 18], ['Vĩ độ', 11], ['Kinh độ', 12],
-      ['Sai số (m)', 11], [`${KC_LABEL} (km)`, 20], ['Google Maps', 12]];
+      ['BLĐ phụ trách', 26], ['Nội dung công tác', 22], ['Thời gian checkin', 18],
+      [`${KC_LABEL} (km)`, 20], ['Google Maps', 12]];
     const N = COLS.length, HR = 7;
     ws.columns = COLS.map(([, w]) => ({ width: w }));
     ws.views = [{ state: 'frozen', ySplit: HR }];
@@ -733,7 +733,14 @@ $('#d-csv').addEventListener('click', async () => {
       c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF388087' } };
       font(c, { bold: true, color: { argb: 'FFFFFFFF' } });
     });
-    const border = { style: 'thin', color: { argb: 'FFBFBFBF' } };
+    const border = { style: 'thin', color: { argb: 'FF000000' } };
+    // BLĐ phụ trách: Phó GĐ chỉ ghi GĐ Trần Anh Tú; các cán bộ khác ghi PGĐ (trên) và GĐ (dưới)
+    const DS_BY = new Map(DS.map(x => [x.ten, x]));
+    const blText = r => {
+      const d = DS_BY.get(r.hoTen), gd = 'GĐ Trần Anh Tú';
+      if (d && d.chucDanh === 'Phó Giám Đốc Công Ty') return gd;
+      return r.bld ? `${r.bld}\n${gd}` : gd;
+    };
 
     for (let i = 0; i < list.length; i++) {
       const r = list[i];
@@ -741,8 +748,8 @@ $('#d-csv').addEventListener('click', async () => {
       let src = r.anhNho;
       try { if (!r.anh) r.anh = (await openPart(r.key, await fb('GET', `/p/${r.id}`))).anh; src = r.anh; } catch {}
       const [iw, ih] = await imgSize(src), imgH = Math.round(IMG_W * ih / iw);
-      const row = ws.addRow([i + 1, '', r.hoTen, r.chucDanh, r.phong, r.khuVuc, r.bld, r.noiDung, fmtTime(r.at),
-        r.lat, r.lng, r.acc, +((r.kc ?? kcMet(r.lat, r.lng)) / 1000).toFixed(2),
+      const row = ws.addRow([i + 1, '', r.hoTen, r.chucDanh, r.phong, r.khuVuc, blText(r), r.noiDung, fmtTime(r.at),
+        +((r.kc ?? kcMet(r.lat, r.lng)) / 1000).toFixed(2),
         { text: 'Xem bản đồ', hyperlink: mapLink(r.lat, r.lng) }]);
       row.height = (imgH + 10) * 0.75;
       row.alignment = { vertical: 'middle', wrapText: true };
@@ -751,6 +758,10 @@ $('#d-csv').addEventListener('click', async () => {
       const id = wb.addImage({ base64: src, extension: 'jpeg' });
       ws.addImage(id, { tl: { col: 1.04, row: row.number - 1 + 0.03 }, ext: { width: IMG_W, height: imgH }, editAs: 'oneCell' });
     }
+
+    // kẻ khung toàn bộ bảng (tiêu đề + dữ liệu)
+    for (let rn = HR; rn <= ws.lastRow.number; rn++)
+      for (let cn = 1; cn <= N; cn++) ws.getCell(rn, cn).border = { top: border, left: border, bottom: border, right: border };
 
     // khối ký tên cuối báo cáo: Người lập (trái) · TP. HCNS (giữa) · BLĐ (phải)
     const sig = ws.lastRow.number + 2;
