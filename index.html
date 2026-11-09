@@ -104,8 +104,9 @@
   <label class="f" for="s-name">Cán bộ checkin *</label>
   <select id="s-name"></select>
   <div class="box" id="s-info" style="display:none"></div>
-  <label class="f" for="s-note">Nơi / nội dung công tác</label>
+  <label class="f" for="s-note">Nội dung công tác * (tối thiểu 20 ký tự)</label>
   <textarea id="s-note" placeholder="VD: Làm việc với khách hàng tại TP Cao Lãnh"></textarea>
+  <div class="muted" id="note-count" style="font-size:13px;margin-top:4px;text-align:right">0/20 ký tự</div>
 
   <label class="f">Vị trí hiện tại * (bắt buộc)</label>
   <div class="box" id="geo-box">Đang lấy vị trí…</div>
@@ -329,6 +330,8 @@ function showInfo() {
   if (cb) box.innerHTML = `${esc(cb.phong)} · ${esc(cb.khuVuc)}<br>Chức danh: <b>${esc(cb.chucDanh)}</b>${cb.bld ? `<br>BLĐ phụ trách: ${esc(cb.bld)}` : ''}`;
 }
 nameEl.addEventListener('change', () => { showInfo(); sMsg(''); });
+function updNote() { const n = noteEl.value.trim().replace(/\s+/g, ' ').length, el = $('#note-count'); el.textContent = `${n}/20 ký tự`; el.style.color = n >= 20 ? 'var(--ok)' : 'var(--muted)'; }
+noteEl.addEventListener('input', updNote); updNote();
 { const i = DS.findIndex(x => x.ten === lsGet(LS_NAME)); if (i >= 0) nameEl.value = i; showInfo(); }
 
 function enterStaff() {
@@ -440,6 +443,8 @@ $('#s-submit').addEventListener('click', async () => {
   if (sending) return;
   const cb = canBo();
   if (!cb) return sMsg('Vui lòng chọn tên của bạn.', 'err'), nameEl.focus();
+  const note = noteEl.value.trim().replace(/\s+/g, ' ');
+  if (note.length < 20) return sMsg(`Nội dung công tác phải có ít nhất 20 ký tự (hiện ${note.length}).`, 'err'), noteEl.focus();
   if (!photoFile) return sMsg('Vui lòng mở camera và chụp ảnh checkin.', 'err');
   if (Date.now() - photoTakenAt > 10 * 60e3) { resetCam(); return sMsg('Ảnh đã chụp quá 10 phút — vui lòng chụp lại.', 'err'); }
   sending = true; const btn = $('#s-submit'); btn.disabled = true;
@@ -466,7 +471,7 @@ $('#s-submit').addEventListener('click', async () => {
     lsSet(LS_NAME, meta.hoTen);
     $('#done-sum').innerHTML = `<b>${esc(meta.hoTen)}</b> · ${esc(meta.chucDanh)}<br>${esc(meta.donVi)}<br>${fmtTime(now)}<br>
       📍 <a href="${mapLink(geo.lat, geo.lng)}" target="_blank" rel="noopener">${geo.lat}, ${geo.lng}</a> (±${geo.acc} m)<br>📏 ${KC_LABEL}: <b>${fmtKc(geo.kc)}</b>`;
-    noteEl.value = ''; resetCam(); sMsg('');
+    noteEl.value = ''; updNote(); resetCam(); sMsg('');
     go('v-done');
   } catch (e) {
     sMsg('⚠️ ' + esc(navigator.onLine ? e.message : 'Mất mạng — có mạng lại thì bấm Gửi checkin.'), 'err');
