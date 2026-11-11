@@ -845,6 +845,14 @@ function loadExcelJS() {
 }
 const imgSize = src => new Promise(ok => { const i = new Image(); i.onload = () => ok([i.naturalWidth, i.naturalHeight]); i.onerror = () => ok([4, 3]); i.src = src; });
 
+/* tiêu đề khi xem tất cả: ghi tháng/năm từ đầu đến cuối dữ liệu đang lọc */
+function monthRangeTxt(list) {
+  const ts = list.map(effTs);
+  if (!ts.length) return '';
+  const mm = d => `${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+  const a = mm(new Date(Math.min(...ts))), b = mm(new Date(Math.max(...ts)));
+  return a === b ? `THÁNG ${a}` : `TỪ THÁNG ${a} ĐẾN THÁNG ${b}`;
+}
 $('#d-csv').addEventListener('click', async () => {
   const btn = $('#d-csv'), label = btn.textContent, list = filtered().filter(r => !r.bad);
   if (!list.length) return alert('Không có lượt checkin nào để xuất.');
@@ -887,7 +895,7 @@ $('#d-csv').addEventListener('click', async () => {
 
     // tiêu đề căn giữa theo chiều rộng bảng
     const title = per.ky === 'thang' ? `BÁO CÁO CÔNG TÁC THÁNG ${per.key.split('-').reverse().join('/')} – CÁN BỘ CÔNG TY`
-      : per.ky === 'tatca' ? 'BÁO CÁO CÔNG TÁC – CÁN BỘ CÔNG TY'
+      : per.ky === 'tatca' ? `BÁO CÁO CÔNG TÁC ${monthRangeTxt(list)} – CÁN BỘ CÔNG TY`
       : `BÁO CÁO CÔNG TÁC ${per.label.toUpperCase()} – CÁN BỘ CÔNG TY`;
     const cbSel = $('#f-cb').value;
     const titleFull = cbSel ? `${title} · ${cbSel.toUpperCase()}` : title;
