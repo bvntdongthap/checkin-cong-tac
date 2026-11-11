@@ -107,12 +107,22 @@
   <label class="f" for="s-note">Nội dung công tác * (tối thiểu 20 ký tự)</label>
   <textarea id="s-note" placeholder="VD: Nội dung công tác, địa điểm công tác, …"></textarea>
   <div class="muted" id="note-count" style="font-size:13px;margin-top:4px;text-align:right">0/20 ký tự</div>
+  <label class="f" for="s-date">Ngày đi công tác *</label>
+  <input type="date" id="s-date" lang="vi-VN">
+  <label class="f" for="s-km">Số km đi công tác *</label>
+  <input type="number" id="s-km" inputmode="decimal" min="0" step="0.1" placeholder="VD: 25">
+  <label class="f" for="s-pt">Phương tiện *</label>
+  <select id="s-pt"><option value="">— Chọn —</option><option value="Tự túc">Tự túc</option><option value="Công ty bố trí xe">Công ty bố trí xe</option></select>
 
   <label class="f">Vị trí hiện tại * (bắt buộc)</label>
   <div class="box" id="geo-box">Đang lấy vị trí…</div>
   <div class="row" style="margin-top:8px"><button class="sec" id="geo-btn">Lấy lại vị trí</button></div>
+  <label class="f" for="gm-in">Hoặc dán toạ độ / link Google Maps</label>
+  <input type="text" id="gm-in" placeholder="VD: 10.293, 105.757  hoặc dán link Google Maps">
+  <div class="row" style="margin-top:8px"><button class="sec" id="gm-use">Dùng vị trí này</button></div>
+  <div class="msg" id="gm-msg"></div>
 
-  <label class="f">Ảnh checkin * (chụp trực tiếp bằng camera, không tải ảnh có sẵn)</label>
+  <label class="f">Ảnh checkin * (chụp bằng camera hoặc chọn ảnh từ máy)</label>
   <div class="cam" id="cam">
     <div class="cam-view">
       <video id="cam-video" playsinline webkit-playsinline muted autoplay disablepictureinpicture></video>
@@ -128,6 +138,8 @@
     <div class="msg" id="cam-msg"></div>
   </div>
 
+  <div class="row" style="margin-top:8px"><button class="sec" id="pick-btn">📁 Chọn ảnh từ máy</button></div>
+  <input type="file" id="pick-file" accept="image/*" style="display:none">
   <div class="msg" id="s-msg"></div>
   <div class="row"><button id="s-submit">Gửi checkin</button></div>
 </div>
@@ -324,6 +336,7 @@ nameEl.innerHTML = '<option value="">— Chọn tên của bạn —</option>' +
 $('#f-phong').innerHTML += PHONGS.map(p => `<option>${esc(p)}</option>`).join('');
 $('#f-cb').innerHTML += DS.map(x => `<option value="${esc(x.ten)}">${esc(x.ten)}</option>`).join('');
 const canBo = () => DS[nameEl.value] || null;
+$('#s-date').value = dayKey(Date.now());
 function showInfo() {
   const cb = canBo(), box = $('#s-info');
   box.style.display = cb ? '' : 'none';
@@ -340,6 +353,22 @@ function enterStaff() {
 }
 
 function renderGeo(html, cls) { const b = $('#geo-box'); b.className = 'box ' + (cls || ''); b.innerHTML = html; }
+const accTxt = a => a == null ? '' : ` (±${a} m)`;
+function renderGeoOK() {
+  const warn = geo.acc > 200 ? `<br><span class="warn">Sai số lớn (±${geo.acc} m) — nên bật GPS / ra chỗ thoáng rồi bấm "Lấy lại vị trí".</span>` : '';
+  renderGeo(`📍 ${geo.lat}, ${geo.lng}${geo.acc == null ? ' <span class="muted">(từ Google Maps)</span>' : `${accTxt(geo.acc)}`} · <a href="${mapLink(geo.lat, geo.lng)}" target="_blank" rel="noopener">Xem trên Google Maps</a>
+    <br>📏 ${KC_LABEL}: <b>${fmtKc(geo.kc)}</b> <span class="muted">(đường chim bay)</span>${warn}`, 'ok');
+}
+/* đọc toạ độ từ "10.293, 105.757" hoặc link Google Maps (@lat,lng / q=lat,lng / !3dLAT!4dLNG) */
+function parseLatLng(txt) {
+  txt = String(txt || '').trim();
+  const m = txt.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/) || txt.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)
+         || txt.match(/[?&](?:q|ll|query|center)=(-?\d+\.\d+)(?:,|%2C)(-?\d+\.\d+)/) || txt.match(/(-?\d{1,2}\.\d+)[,\s]+(-?\d{1,3}\.\d+)/);
+  if (!m) return null;
+  const lat = +m[1], lng = +m[2];
+  if (!(Math.abs(lat) <= 90 && Math.abs(lng) <= 180)) return null;
+  return { lat: +lat.toFixed(6), lng: +lng.toFixed(6) };
+}
 function getGeo() {
   return new Promise(resolve => {
     if (!navigator.geolocation) { renderGeo('Thiết bị không hỗ trợ định vị.', 'err'); return resolve(null); }
@@ -348,9 +377,7 @@ function getGeo() {
       geoBusy = false;
       geo = { lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6), acc: Math.round(p.coords.accuracy), t: Date.now() };
       geo.kc = kcMet(geo.lat, geo.lng);
-      const warn = geo.acc > 200 ? `<br><span class="warn">Sai số lớn (±${geo.acc} m) — nên bật GPS / ra chỗ thoáng rồi bấm "Lấy lại vị trí".</span>` : '';
-      renderGeo(`📍 ${geo.lat}, ${geo.lng} <span class="muted">(±${geo.acc} m)</span> · <a href="${mapLink(geo.lat, geo.lng)}" target="_blank" rel="noopener">Xem trên Google Maps</a>
-        <br>📏 ${KC_LABEL}: <b>${fmtKc(geo.kc)}</b> <span class="muted">(đường chim bay)</span>${warn}`, 'ok');
+      renderGeoOK();
       resolve(geo);
     }, e => {
       geoBusy = false; geo = null;
@@ -411,6 +438,27 @@ $('#cam-snap').addEventListener('click', snap);
 $('#cam-retake').addEventListener('click', openCam);
 $('#cam-flip').addEventListener('click', () => { facing = facing === 'user' ? 'environment' : 'user'; openCam(); });
 function resetCam() { stopCam(); facing = 'user'; photoFile = null; camView.classList.remove('shot', 'live'); camBtns(true, false, false, false); camMsg(''); }
+$('#pick-btn').addEventListener('click', () => $('#pick-file').click());
+$('#pick-file').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try {
+    stopCam();
+    const bmp = await createImageBitmap(f), sc = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+    shot.width = Math.round(bmp.width * sc); shot.height = Math.round(bmp.height * sc);
+    shot.getContext('2d').drawImage(bmp, 0, 0, shot.width, shot.height);
+    photoFile = shot; photoTakenAt = Date.now();
+    camView.classList.remove('live', 'mirror'); camView.classList.add('shot'); camBtns(false, false, false, true);
+    camMsg('✓ Đã chọn ảnh từ máy. Ảnh sẽ được đóng dấu vị trí khi gửi.', 'ok');
+  } catch (err) { camMsg('⚠️ Không đọc được ảnh (' + esc(err.message) + ').', 'err'); }
+});
+const gmMsg = (t, c) => { const m = $('#gm-msg'); m.className = 'msg ' + (c || ''); m.textContent = t; };
+$('#gm-use').addEventListener('click', () => {
+  const p = parseLatLng($('#gm-in').value);
+  if (!p) return gmMsg('Không đọc được toạ độ. Dán dạng "10.293, 105.757" hoặc link Google Maps có toạ độ.', 'err');
+  geo = { lat: p.lat, lng: p.lng, acc: null, t: Date.now(), src: 'gm' };
+  geo.kc = kcMet(geo.lat, geo.lng);
+  renderGeoOK(); gmMsg('✓ Đã nhận toạ độ từ Google Maps.', 'ok');
+});
 
 /* thu nhỏ ảnh + đóng dấu tên, giờ, toạ độ lên ảnh */
 async function makeImages(file, stamp) {
@@ -445,6 +493,10 @@ $('#s-submit').addEventListener('click', async () => {
   if (!cb) return sMsg('Vui lòng chọn tên của bạn.', 'err'), nameEl.focus();
   const note = noteEl.value.trim().replace(/\s+/g, ' ');
   if (note.length < 20) return sMsg(`Nội dung công tác phải có ít nhất 20 ký tự (hiện ${note.length}).`, 'err'), noteEl.focus();
+  const ngay = $('#s-date').value, km = parseFloat($('#s-km').value), pt = $('#s-pt').value;
+  if (!ngay) return sMsg('Vui lòng chọn ngày đi công tác.', 'err'), $('#s-date').focus();
+  if (!(km >= 0)) return sMsg('Vui lòng nhập số km đi công tác.', 'err'), $('#s-km').focus();
+  if (!pt) return sMsg('Vui lòng chọn phương tiện (Tự túc / Công ty bố trí xe).', 'err'), $('#s-pt').focus();
   if (!photoFile) return sMsg('Vui lòng mở camera và chụp ảnh checkin.', 'err');
   if (Date.now() - photoTakenAt > 10 * 60e3) { resetCam(); return sMsg('Ảnh đã chụp quá 10 phút — vui lòng chụp lại.', 'err'); }
   sending = true; const btn = $('#s-submit'); btn.disabled = true;
@@ -453,13 +505,13 @@ $('#s-submit').addEventListener('click', async () => {
     if (!geo) throw new Error('Chưa có vị trí — bắt buộc bật định vị');
     sMsg('Đang xử lý ảnh…', 'muted');
     const now = Date.now();
-    const meta = { hoTen: cb.ten, chucDanh: cb.chucDanh, phong: cb.phong, khuVuc: cb.khuVuc, bld: cb.bld,
+    const meta = { ngayCongTac: ngay, soKm: km, phuongTien: pt, hoTen: cb.ten, chucDanh: cb.chucDanh, phong: cb.phong, khuVuc: cb.khuVuc, bld: cb.bld,
                    donVi: `${cb.phong} · ${cb.khuVuc}`, noiDung: noteEl.value.trim(),
                    lat: geo.lat, lng: geo.lng, acc: geo.acc, kc: geo.kc, viTriLuc: geo.t, mayLuc: now,
                    thietBi: navigator.userAgent.slice(0, 160) };
     const imgs = await makeImages(photoFile, [
       `${meta.hoTen} · ${meta.chucDanh}`, `${meta.donVi} · ${fmtTime(now)}`,
-      `${KC_LABEL}: ${fmtKc(geo.kc)}`, `📍 ${geo.lat}, ${geo.lng} (±${geo.acc} m)` ]);
+      `${KC_LABEL}: ${fmtKc(geo.kc)}`, `📍 ${geo.lat}, ${geo.lng}${accTxt(geo.acc)}` ]);
     meta.anhNho = imgs.thumb;
     sMsg('Đang mã hoá và gửi…', 'muted');
     const { epk, out } = await sealFor(await getPub(), [meta, { anh: imgs.full }]);
@@ -470,8 +522,8 @@ $('#s-submit').addEventListener('click', async () => {
     });
     lsSet(LS_NAME, meta.hoTen);
     $('#done-sum').innerHTML = `<b>${esc(meta.hoTen)}</b> · ${esc(meta.chucDanh)}<br>${esc(meta.donVi)}<br>${fmtTime(now)}<br>
-      📍 <a href="${mapLink(geo.lat, geo.lng)}" target="_blank" rel="noopener">${geo.lat}, ${geo.lng}</a> (±${geo.acc} m)<br>📏 ${KC_LABEL}: <b>${fmtKc(geo.kc)}</b>`;
-    noteEl.value = ''; updNote(); resetCam(); sMsg('');
+      📍 <a href="${mapLink(geo.lat, geo.lng)}" target="_blank" rel="noopener">${geo.lat}, ${geo.lng}</a>${accTxt(geo.acc)}<br>📏 ${KC_LABEL}: <b>${fmtKc(geo.kc)}</b>`;
+    noteEl.value = ''; updNote(); $('#s-km').value = ''; $('#s-pt').value = ''; resetCam(); sMsg('');
     go('v-done');
   } catch (e) {
     sMsg('⚠️ ' + esc(navigator.onLine ? e.message : 'Mất mạng — có mạng lại thì bấm Gửi checkin.'), 'err');
@@ -601,9 +653,10 @@ function renderDash() {
           <div class="nm">${esc(r.hoTen)}${r.chucDanh ? ` <span class="muted" style="font-weight:normal">· ${esc(r.chucDanh)}</span>` : ''}</div>
           <div class="muted">${esc(r.donVi)}</div>
           <div>🕒 ${fmtTime(r.at)}</div>
-          <div>📍 <a href="${mapLink(r.lat, r.lng)}" target="_blank" rel="noopener">${r.lat}, ${r.lng}</a> <span class="${r.acc > 200 ? 'warn' : 'muted'}">±${r.acc} m</span></div>
+          <div>📍 <a href="${mapLink(r.lat, r.lng)}" target="_blank" rel="noopener">${r.lat}, ${r.lng}</a> <span class="${r.acc > 200 ? 'warn' : 'muted'}">${r.acc == null ? '' : '±' + r.acc + ' m'}</span></div>
           <div>📏 ${KC_LABEL}: <b>${fmtKc(r.kc ?? kcMet(r.lat, r.lng))}</b> · <a href="${dirLink(r.lat, r.lng)}" target="_blank" rel="noopener">Chỉ đường</a></div>
           ${r.noiDung ? `<div>📝 ${esc(r.noiDung)}</div>` : ''}
+          <div>📅 ${r.ngayCongTac ? r.ngayCongTac.split('-').reverse().join('/') : '—'} · 🚗 ${r.soKm != null ? r.soKm + ' km' : '—'} · ${esc(r.phuongTien || '—')}</div>
           ${Math.abs(r.mayLuc - r.at) > 10 * 60e3 ? `<div class="warn">Giờ trên máy lệch ${Math.round(Math.abs(r.mayLuc - r.at) / 60e3)} phút</div>` : ''}
           <button class="del" data-del="${r.id}">🗑 Xoá</button>
         </div></div>`).join('') || '<div class="muted">Không có lượt checkin nào.</div>';
@@ -683,9 +736,9 @@ $('#d-csv').addEventListener('click', async () => {
     const per = period(), FONT = 'Times New Roman', SZ = 13;
     const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('Báo cáo công tác');
     const IMG_W = 165;
-    const COLS = [['STT', 8], ['Ảnh checkin', 26], ['Họ tên', 18], ['Chức danh', 18], ['Phòng', 11], ['Khu vực', 18],
-      ['BLĐ phụ trách', 26], ['Nội dung công tác', 22], ['Thời gian checkin', 18],
-      [`${KC_LABEL} (km)`, 20], ['Google Maps', 12]];
+    const COLS = [['STT', 6], ['Ảnh checkin', 26], ['Họ tên', 18], ['Chức danh', 16], ['Phòng', 10], ['Giám đốc phòng phụ trách', 20],
+      ['BLĐ phụ trách', 24], ['Nội dung công tác', 20], ['Ngày đi công tác', 13], ['Số km', 9], ['Phương tiện', 16],
+      ['Thời gian checkin', 17], [`${KC_LABEL} (km)`, 16], ['Google Maps', 12]];
     const N = COLS.length, HR = 7;
     ws.columns = COLS.map(([, w]) => ({ width: w }));
     ws.views = [{ state: 'frozen', ySplit: HR }];
@@ -736,6 +789,11 @@ $('#d-csv').addEventListener('click', async () => {
     const border = { style: 'thin', color: { argb: 'FF000000' } };
     // BLĐ phụ trách: Phó GĐ chỉ ghi GĐ Trần Anh Tú; các cán bộ khác ghi PGĐ (trên) và GĐ (dưới)
     const DS_BY = new Map(DS.map(x => [x.ten, x]));
+    // cột trước BLĐ: giám đốc phòng phụ trách khu vực (theo phòng của cán bộ)
+    const GD_PHONG = { 'Phòng 1': 'Ông: Nguyễn Minh Trí – PGĐ Phòng KD1',
+                       'Phòng 2': 'Ông: Trần Minh Thi – PGĐ',
+                       'Phòng 3': 'Ông: Trần Quang Vinh – PGĐ Phòng KD3' };
+    const gdPhongText = r => GD_PHONG[r.phong] || '—';
     const blText = r => {
       const d = DS_BY.get(r.hoTen), gd = 'Ông: Trần Anh Tú - GĐ Công Ty';
       if (d && d.chucDanh === 'Phó Giám Đốc Công Ty') return gd;
@@ -749,7 +807,9 @@ $('#d-csv').addEventListener('click', async () => {
       let src = r.anhNho;
       try { if (!r.anh) r.anh = (await openPart(r.key, await fb('GET', `/p/${r.id}`))).anh; src = r.anh; } catch {}
       const [iw, ih] = await imgSize(src), imgH = Math.round(IMG_W * ih / iw);
-      const row = ws.addRow([i + 1, '', r.hoTen, r.chucDanh, r.phong, r.khuVuc, blText(r), r.noiDung, fmtTime(r.at),
+      const ngayTxt = r.ngayCongTac ? r.ngayCongTac.split('-').reverse().join('/') : '—';
+      const row = ws.addRow([i + 1, '', r.hoTen, r.chucDanh, r.phong, gdPhongText(r), blText(r), r.noiDung, ngayTxt,
+        r.soKm ?? '', r.phuongTien || '—', fmtTime(r.at),
         +((r.kc ?? kcMet(r.lat, r.lng)) / 1000).toFixed(2),
         { text: 'Xem bản đồ', hyperlink: mapLink(r.lat, r.lng) }]);
       row.height = (imgH + 10) * 0.75;
@@ -766,7 +826,7 @@ $('#d-csv').addEventListener('click', async () => {
 
     // khối ký tên cuối báo cáo: Người lập (trái) · TP. HCNS (giữa) · BLĐ (phải)
     const sig = ws.lastRow.number + 2;
-    [['Người lập', 1, 4], ['TP. HCNS', 5, 8], ['BLĐ', 9, N]].forEach(([t, a, b]) => {
+    [['Người lập', 1, 4], ['TP. HCNS', 5, 9], ['BLĐ', 10, N]].forEach(([t, a, b]) => {
       ws.mergeCells(sig, a, sig, b); ws.mergeCells(sig + 1, a, sig + 1, b);
       const c1 = ws.getCell(sig, a); c1.value = t; c1.alignment = { horizontal: 'center', vertical: 'top' }; font(c1, { bold: true });
       const c2 = ws.getCell(sig + 1, a); c2.value = '(Ký, ghi rõ họ tên)'; c2.alignment = { horizontal: 'center', vertical: 'top' }; font(c2, { italic: true });
