@@ -1,6 +1,6 @@
 {
-  "name": "BVL DTH Checkin",
-  "short_name": "BVL DTH Checkin",
+  "name": "BVL DTH Checkin công tác",
+  "short_name": "BVL DTH Checkin công tác",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#F6F6F2",
