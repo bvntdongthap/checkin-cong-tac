@@ -59,6 +59,13 @@
   .shutter:active { transform:scale(.92); }
   .flip { width:46px; height:46px; padding:0; border-radius:50%; background:rgba(255,255,255,.85); color:var(--teal);
           font-size:24px; line-height:46px; justify-self:start; }
+  .tabs { display:flex; gap:8px; margin:16px 0 4px; }
+  .tab { flex:1; background:var(--bg); color:var(--teal); border:2px solid var(--teal2); font-weight:bold; padding:12px 8px; }
+  .tab.on { background:var(--teal); color:#fff; border-color:var(--teal); }
+  .panel { display:none; border-top:2px solid var(--mint); margin-top:8px; padding-top:4px; }
+  .panel.on { display:block; }
+  #pin-map { height:300px; border-radius:10px; border:1px solid var(--teal2); margin-top:6px; }
+  #bs-prev { display:none; width:100%; max-height:300px; object-fit:contain; border-radius:10px; margin-top:6px; background:#000; }
   .retake { position:absolute; left:12px; bottom:12px; padding:8px 14px; font-size:14px; background:rgba(255,255,255,.9); color:var(--teal); }
   a { color:var(--teal); font-weight:bold; }
   .back { background:none; color:var(--muted); padding:0; font-weight:normal; font-size:14px; margin-bottom:12px; }
@@ -84,6 +91,7 @@
   .stat { color:var(--text); font-size:14px; margin-bottom:12px; background:var(--bg); border-left:4px solid var(--teal2);
           padding:8px 12px; border-radius:6px; line-height:1.6; }
 </style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 </head>
 <body>
 
@@ -114,14 +122,14 @@
   <label class="f" for="s-pt">Phương tiện *</label>
   <select id="s-pt"><option value="">— Chọn —</option><option value="Tự túc">Tự túc</option><option value="Công ty bố trí xe">Công ty bố trí xe</option></select>
 
-  <label class="f">Vị trí hiện tại * (bắt buộc)</label>
-  <div class="box" id="geo-box">Đang lấy vị trí…</div>
-  <div class="row" style="margin-top:8px"><button class="sec" id="geo-btn">Lấy lại vị trí</button></div>
-  <label class="f" for="gm-in">Hoặc dán toạ độ / link Google Maps</label>
-  <input type="text" id="gm-in" placeholder="VD: 10.293, 105.757  hoặc dán link Google Maps">
-  <div class="row" style="margin-top:8px"><button class="sec" id="gm-use">Dùng vị trí này</button></div>
-  <div class="msg" id="gm-msg"></div>
-
+  <div class="tabs">
+    <button type="button" class="tab on" data-tab="live">📸 Trực tiếp</button>
+    <button type="button" class="tab" data-tab="bs">🗂 Bổ sung</button>
+  </div>
+  <div class="panel on" id="p-live">
+    <label class="f">Vị trí hiện tại * (GPS)</label>
+    <div class="box" id="geo-box">Đang lấy vị trí…</div>
+    <div class="row" style="margin-top:8px"><button class="sec" id="geo-btn">Lấy lại vị trí</button></div>
   <label class="f">Ảnh checkin * (chụp bằng camera hoặc chọn ảnh từ máy)</label>
   <div class="cam" id="cam">
     <div class="cam-view">
@@ -138,8 +146,21 @@
     <div class="msg" id="cam-msg"></div>
   </div>
 
-  <div class="row" style="margin-top:8px"><button class="sec" id="pick-btn">📁 Chọn ảnh từ máy</button></div>
-  <input type="file" id="pick-file" accept="image/*" style="display:none">
+  </div>
+  <div class="panel" id="p-bs">
+    <label class="f">Ghim vị trí công tác trên bản đồ * (chạm để ghim, kéo ghim để chỉnh)</label>
+    <div id="pin-map"></div>
+    <div class="box" id="pin-box">Chạm lên bản đồ để ghim vị trí.</div>
+    <label class="f" for="gm-in">Hoặc dán toạ độ / link Google Maps</label>
+    <input type="text" id="gm-in" placeholder="VD: 10.293, 105.757  hoặc dán link Google Maps">
+    <div class="row" style="margin-top:8px"><button class="sec" id="gm-use">Dùng toạ độ này</button></div>
+    <div class="msg" id="gm-msg"></div>
+    <label class="f">Ảnh bổ sung * (chọn từ máy)</label>
+    <canvas id="bs-prev"></canvas>
+    <div class="row" style="margin-top:8px"><button class="sec" id="pick-btn">📁 Chọn ảnh từ máy</button></div>
+    <input type="file" id="pick-file" accept="image/*" style="display:none">
+    <div class="msg" id="bs-msg"></div>
+  </div>
   <div class="msg" id="s-msg"></div>
   <div class="row"><button id="s-submit">Gửi checkin</button></div>
 </div>
@@ -195,6 +216,7 @@
 
 <div class="lightbox" id="lightbox"><img alt=""></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 /* ======================================================================
    Lưu trữ: Firebase Realtime Database (dự án "Dinh", dùng chung với Checkin HNKH)
@@ -348,16 +370,18 @@ noteEl.addEventListener('input', updNote); updNote();
 { const i = DS.findIndex(x => x.ten === lsGet(LS_NAME)); if (i >= 0) nameEl.value = i; showInfo(); }
 
 function enterStaff() {
+  if (curTab === 'bs') { initPin(); return; }
   if (!geo || Date.now() - geo.t > 5 * 60e3) getGeo();
-  if (!photoFile && !stream) { facing = 'user'; openCam(); }      // luôn mở sẵn camera trước
+  if (!photoFile && !stream) { facing = 'user'; openCam(); }      // tab Trực tiếp: mở sẵn camera trước
 }
 
-function renderGeo(html, cls) { const b = $('#geo-box'); b.className = 'box ' + (cls || ''); b.innerHTML = html; }
+function renderGeo(html, cls, sel = '#geo-box') { const b = $(sel); b.className = 'box ' + (cls || ''); b.innerHTML = html; }
 const accTxt = a => a == null ? '' : ` (±${a} m)`;
-function renderGeoOK() {
+function renderGeoOK(sel = '#geo-box') {
   const warn = geo.acc > 200 ? `<br><span class="warn">Sai số lớn (±${geo.acc} m) — nên bật GPS / ra chỗ thoáng rồi bấm "Lấy lại vị trí".</span>` : '';
-  renderGeo(`📍 ${geo.lat}, ${geo.lng}${geo.acc == null ? ' <span class="muted">(từ Google Maps)</span>' : `${accTxt(geo.acc)}`} · <a href="${mapLink(geo.lat, geo.lng)}" target="_blank" rel="noopener">Xem trên Google Maps</a>
-    <br>📏 ${KC_LABEL}: <b>${fmtKc(geo.kc)}</b> <span class="muted">(đường chim bay)</span>${warn}`, 'ok');
+  const src = geo.acc == null ? ' <span class="muted">(đã ghim trên bản đồ)</span>' : accTxt(geo.acc);
+  renderGeo(`📍 ${geo.lat}, ${geo.lng}${src} · <a href="${mapLink(geo.lat, geo.lng)}" target="_blank" rel="noopener">Xem trên Google Maps</a>
+    <br>📏 ${KC_LABEL}: <b>${fmtKc(geo.kc)}</b> <span class="muted">(đường chim bay)</span>${warn}`, 'ok', sel);
 }
 /* đọc toạ độ từ "10.293, 105.757" hoặc link Google Maps (@lat,lng / q=lat,lng / !3dLAT!4dLNG) */
 function parseLatLng(txt) {
@@ -438,27 +462,77 @@ $('#cam-snap').addEventListener('click', snap);
 $('#cam-retake').addEventListener('click', openCam);
 $('#cam-flip').addEventListener('click', () => { facing = facing === 'user' ? 'environment' : 'user'; openCam(); });
 function resetCam() { stopCam(); facing = 'user'; photoFile = null; camView.classList.remove('shot', 'live'); camBtns(true, false, false, false); camMsg(''); }
+let curTab = 'live', pinMap = null, pinMarker = null;
+const tabSave = { live: { geo: null, photo: null, t: 0 }, bs: { geo: null, photo: null, t: 0 } };
+function setTab(t) {
+  if (t === curTab) return;
+  tabSave[curTab] = { geo, photo: photoFile, t: photoTakenAt };
+  stopCam();
+  curTab = t;
+  ({ geo, photo: photoFile, t: photoTakenAt } = tabSave[t]);
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+  $('#p-live').classList.toggle('on', t === 'live'); $('#p-bs').classList.toggle('on', t === 'bs');
+  if (t === 'live') {
+    if (geo) renderGeoOK('#geo-box'); else getGeo();
+    if (photoFile === shot) { camView.classList.add('shot'); camBtns(false, false, false, true); camMsg('✓ Đã chụp ảnh.', 'ok'); }
+    else if (!photoFile) { facing = 'user'; openCam(); }
+  } else {
+    initPin();
+    if (geo) renderGeoOK('#pin-box');
+  }
+}
+document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+
 $('#pick-btn').addEventListener('click', () => $('#pick-file').click());
 $('#pick-file').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const msg = (t, c) => { const m = $('#bs-msg'); m.className = 'msg ' + (c || ''); m.textContent = t; };
   try {
-    stopCam();
-    const bmp = await createImageBitmap(f), sc = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
-    shot.width = Math.round(bmp.width * sc); shot.height = Math.round(bmp.height * sc);
-    shot.getContext('2d').drawImage(bmp, 0, 0, shot.width, shot.height);
-    photoFile = shot; photoTakenAt = Date.now();
-    camView.classList.remove('live', 'mirror'); camView.classList.add('shot'); camBtns(false, false, false, true);
-    camMsg('✓ Đã chọn ảnh từ máy. Ảnh sẽ được đóng dấu vị trí khi gửi.', 'ok');
-  } catch (err) { camMsg('⚠️ Không đọc được ảnh (' + esc(err.message) + ').', 'err'); }
+    const bmp = await createImageBitmap(f), sc = Math.min(1, 1600 / Math.max(bmp.width, bmp.height)), cv = $('#bs-prev');
+    cv.width = Math.round(bmp.width * sc); cv.height = Math.round(bmp.height * sc);
+    cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+    cv.style.display = 'block'; photoFile = cv; photoTakenAt = Date.now();
+    msg('✓ Đã chọn ảnh. Ảnh sẽ được đóng dấu vị trí khi gửi.', 'ok');
+  } catch (err) { msg('⚠️ Không đọc được ảnh (' + err.message + ').', 'err'); }
 });
+
 const gmMsg = (t, c) => { const m = $('#gm-msg'); m.className = 'msg ' + (c || ''); m.textContent = t; };
 $('#gm-use').addEventListener('click', () => {
   const p = parseLatLng($('#gm-in').value);
   if (!p) return gmMsg('Không đọc được toạ độ. Dán dạng "10.293, 105.757" hoặc link Google Maps có toạ độ.', 'err');
-  geo = { lat: p.lat, lng: p.lng, acc: null, t: Date.now(), src: 'gm' };
-  geo.kc = kcMet(geo.lat, geo.lng);
-  renderGeoOK(); gmMsg('✓ Đã nhận toạ độ từ Google Maps.', 'ok');
+  setPin(p.lat, p.lng); gmMsg('✓ Đã nhận toạ độ.', 'ok');
 });
+
+/* bản đồ ghim (OpenStreetMap qua Leaflet): chạm để ghim, kéo ghim để chỉnh */
+function initPin() {
+  if (pinMap) { setTimeout(() => pinMap.invalidateSize(), 150); return; }
+  if (!window.L) { $('#pin-box').textContent = 'Không tải được bản đồ (cần mạng). Có thể dán toạ độ bên dưới.'; return; }
+  pinMap = L.map('pin-map').setView([10.4598, 105.6399], 15);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(pinMap);
+  pinMap.on('click', e => setPin(e.latlng.lat, e.latlng.lng));
+  setTimeout(() => pinMap.invalidateSize(), 150);
+  if (geo && curTab === 'bs') setPin(geo.lat, geo.lng);
+}
+function setPin(lat, lng) {
+  const p = { lat: +(+lat).toFixed(6), lng: +(+lng).toFixed(6) };
+  if (pinMap) {
+    if (!pinMarker) {
+      pinMarker = L.marker([p.lat, p.lng], { draggable: true }).addTo(pinMap);
+      pinMarker.on('dragend', () => { const q = pinMarker.getLatLng(); setPin(q.lat, q.lng); });
+    } else pinMarker.setLatLng([p.lat, p.lng]);
+    pinMap.panTo([p.lat, p.lng]);
+  }
+  geo = { lat: p.lat, lng: p.lng, acc: null, t: Date.now(), src: 'map', kc: kcMet(p.lat, p.lng) };
+  renderGeoOK('#pin-box');
+}
+function resetBs() {
+  photoFile = null; photoTakenAt = 0; geo = null; tabSave.bs = { geo: null, photo: null, t: 0 };
+  if (pinMarker) { pinMarker.remove(); pinMarker = null; }
+  $('#bs-prev').style.display = 'none';
+  $('#pin-box').textContent = 'Chạm lên bản đồ để ghim vị trí.';
+  $('#gm-in').value = ''; gmMsg('');
+  $('#bs-msg').textContent = '';
+}
 
 /* thu nhỏ ảnh + đóng dấu tên, giờ, toạ độ lên ảnh */
 async function makeImages(file, stamp) {
@@ -497,15 +571,15 @@ $('#s-submit').addEventListener('click', async () => {
   if (!ngay) return sMsg('Vui lòng chọn ngày đi công tác.', 'err'), $('#s-date').focus();
   if (!(km >= 0)) return sMsg('Vui lòng nhập số km đi công tác.', 'err'), $('#s-km').focus();
   if (!pt) return sMsg('Vui lòng chọn phương tiện (Tự túc / Công ty bố trí xe).', 'err'), $('#s-pt').focus();
-  if (!photoFile) return sMsg('Vui lòng mở camera và chụp ảnh checkin.', 'err');
-  if (Date.now() - photoTakenAt > 10 * 60e3) { resetCam(); return sMsg('Ảnh đã chụp quá 10 phút — vui lòng chụp lại.', 'err'); }
+  if (!photoFile) return sMsg(curTab === 'live' ? 'Vui lòng mở camera và chụp ảnh.' : 'Vui lòng chọn ảnh từ máy.', 'err');
+  if (curTab === 'live' && Date.now() - photoTakenAt > 10 * 60e3) { resetCam(); return sMsg('Ảnh đã chụp quá 10 phút — vui lòng chụp lại.', 'err'); }
   sending = true; const btn = $('#s-submit'); btn.disabled = true;
   try {
-    if (!geo || Date.now() - geo.t > 5 * 60e3) { sMsg('Đang cập nhật vị trí…', 'muted'); await getGeo(); }
-    if (!geo) throw new Error('Chưa có vị trí — bắt buộc bật định vị');
+    if (curTab === 'live' && (!geo || Date.now() - geo.t > 5 * 60e3)) { sMsg('Đang cập nhật vị trí…', 'muted'); await getGeo(); }
+    if (!geo) throw new Error(curTab === 'live' ? 'Chưa có vị trí — bắt buộc bật định vị' : 'Chưa ghim vị trí trên bản đồ');
     sMsg('Đang xử lý ảnh…', 'muted');
     const now = Date.now();
-    const meta = { ngayCongTac: ngay, soKm: km, phuongTien: pt, hoTen: cb.ten, chucDanh: cb.chucDanh, phong: cb.phong, khuVuc: cb.khuVuc, bld: cb.bld,
+    const meta = { kieu: curTab, ngayCongTac: ngay, soKm: km, phuongTien: pt, hoTen: cb.ten, chucDanh: cb.chucDanh, phong: cb.phong, khuVuc: cb.khuVuc, bld: cb.bld,
                    donVi: `${cb.phong} · ${cb.khuVuc}`, noiDung: noteEl.value.trim(),
                    lat: geo.lat, lng: geo.lng, acc: geo.acc, kc: geo.kc, viTriLuc: geo.t, mayLuc: now,
                    thietBi: navigator.userAgent.slice(0, 160) };
@@ -523,7 +597,7 @@ $('#s-submit').addEventListener('click', async () => {
     lsSet(LS_NAME, meta.hoTen);
     $('#done-sum').innerHTML = `<b>${esc(meta.hoTen)}</b> · ${esc(meta.chucDanh)}<br>${esc(meta.donVi)}<br>${fmtTime(now)}<br>
       📍 <a href="${mapLink(geo.lat, geo.lng)}" target="_blank" rel="noopener">${geo.lat}, ${geo.lng}</a>${accTxt(geo.acc)}<br>📏 ${KC_LABEL}: <b>${fmtKc(geo.kc)}</b>`;
-    noteEl.value = ''; updNote(); $('#s-km').value = ''; $('#s-pt').value = ''; resetCam(); sMsg('');
+    noteEl.value = ''; updNote(); $('#s-km').value = ''; $('#s-pt').value = ''; (curTab === 'bs' ? resetBs() : resetCam()); sMsg('');
     go('v-done');
   } catch (e) {
     sMsg('⚠️ ' + esc(navigator.onLine ? e.message : 'Mất mạng — có mạng lại thì bấm Gửi checkin.'), 'err');
@@ -656,7 +730,7 @@ function renderDash() {
           <div>📍 <a href="${mapLink(r.lat, r.lng)}" target="_blank" rel="noopener">${r.lat}, ${r.lng}</a> <span class="${r.acc > 200 ? 'warn' : 'muted'}">${r.acc == null ? '' : '±' + r.acc + ' m'}</span></div>
           <div>📏 ${KC_LABEL}: <b>${fmtKc(r.kc ?? kcMet(r.lat, r.lng))}</b> · <a href="${dirLink(r.lat, r.lng)}" target="_blank" rel="noopener">Chỉ đường</a></div>
           ${r.noiDung ? `<div>📝 ${esc(r.noiDung)}</div>` : ''}
-          <div>📅 ${r.ngayCongTac ? r.ngayCongTac.split('-').reverse().join('/') : '—'} · 🚗 ${r.soKm != null ? r.soKm + ' km' : '—'} · ${esc(r.phuongTien || '—')}</div>
+          <div>📅 ${r.ngayCongTac ? r.ngayCongTac.split('-').reverse().join('/') : '—'} · 🚗 ${r.soKm != null ? r.soKm + ' km' : '—'} · ${esc(r.phuongTien || '—')}${r.kieu ? ' · ' + (r.kieu === 'bs' ? 'Bổ sung' : 'Trực tiếp') : ''}</div>
           ${Math.abs(r.mayLuc - r.at) > 10 * 60e3 ? `<div class="warn">Giờ trên máy lệch ${Math.round(Math.abs(r.mayLuc - r.at) / 60e3)} phút</div>` : ''}
           <button class="del" data-del="${r.id}">🗑 Xoá</button>
         </div></div>`).join('') || '<div class="muted">Không có lượt checkin nào.</div>';
