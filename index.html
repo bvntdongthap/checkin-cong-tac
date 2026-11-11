@@ -64,6 +64,14 @@
   .tab.on { background:var(--teal); color:#fff; border-color:var(--teal); }
   .panel { display:none; border-top:2px solid var(--mint); margin-top:8px; padding-top:4px; }
   .panel.on { display:block; }
+  .maptools { display:flex; gap:6px; margin-top:6px; }
+  .maptools input { flex:1; min-width:0; padding:10px; font-size:15px; }
+  .maptools button { padding:10px 10px; font-size:14px; white-space:nowrap; }
+  #pin-res { font-size:14px; }
+  #pin-res button { display:block; width:100%; text-align:left; background:#fff; color:var(--text); border:1px solid var(--sky); font-weight:normal; font-size:14px; padding:8px; margin-top:4px; }
+  #pin-wrap.full { position:fixed; inset:0; z-index:50; background:var(--bg); padding:10px; display:flex; flex-direction:column; }
+  #pin-wrap.full #pin-map { flex:1; height:auto; margin-top:6px; }
+  #pin-wrap.full #pin-res { max-height:28vh; overflow:auto; }
   #pin-map { height:300px; border-radius:10px; border:1px solid var(--teal2); margin-top:6px; }
   #bs-prev { display:none; width:100%; max-height:300px; object-fit:contain; border-radius:10px; margin-top:6px; background:#000; }
   .retake { position:absolute; left:12px; bottom:12px; padding:8px 14px; font-size:14px; background:rgba(255,255,255,.9); color:var(--teal); }
@@ -151,7 +159,15 @@
   </div>
   <div class="panel" id="p-bs">
     <label class="f">Ghim vị trí công tác trên bản đồ * (chạm để ghim, kéo ghim để chỉnh)</label>
-    <div id="pin-map"></div>
+    <div id="pin-wrap">
+      <div class="maptools">
+        <input type="search" id="pin-q" placeholder="Tìm địa điểm (VD: Viettel Cao Lãnh)">
+        <button type="button" class="sec" id="pin-find">Tìm</button>
+        <button type="button" class="sec" id="pin-expand">⤢ Phóng to</button>
+      </div>
+      <div id="pin-res"></div>
+      <div id="pin-map"></div>
+    </div>
     <div class="box" id="pin-box">Chạm lên bản đồ để ghim vị trí.</div>
     <label class="f">Ảnh bổ sung * (chọn từ máy)</label>
     <canvas id="bs-prev"></canvas>
@@ -519,12 +535,40 @@ function setPin(lat, lng) {
   geo = { lat: p.lat, lng: p.lng, acc: null, t: Date.now(), src: 'map', kc: kcMet(p.lat, p.lng) };
   renderGeoOK('#pin-box');
 }
+$('#pin-expand').addEventListener('click', () => {
+  const full = $('#pin-wrap').classList.toggle('full');
+  $('#pin-expand').textContent = full ? '✓ Thu nhỏ' : '⤢ Phóng to';
+  if (pinMap) setTimeout(() => pinMap.invalidateSize(), 150);
+});
+async function findPlace() {
+  const q = $('#pin-q').value.trim(), out = $('#pin-res');
+  if (!q) return;
+  out.textContent = 'Đang tìm…';
+  try {
+    const r = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=6&countrycodes=vn&q=' + encodeURIComponent(q),
+      { headers: { 'Accept-Language': 'vi' } });
+    const list = await r.json();
+    if (!list.length) { out.textContent = 'Không thấy địa điểm này. Thử ghi thêm tên phường/huyện.'; return; }
+    out.innerHTML = '';
+    list.forEach(x => {
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = x.display_name;
+      b.addEventListener('click', () => {
+        if (pinMap) pinMap.setView([+x.lat, +x.lon], 17);
+        setPin(+x.lat, +x.lon); out.innerHTML = ''; $('#pin-q').value = x.display_name.split(',')[0];
+      });
+      out.appendChild(b);
+    });
+  } catch (e) { out.textContent = 'Không tìm được (cần mạng). Có thể chạm trực tiếp lên bản đồ.'; }
+}
+$('#pin-find').addEventListener('click', findPlace);
+$('#pin-q').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); findPlace(); } });
+
 function resetBs() {
   photoFile = null; photoTakenAt = 0; geo = null; tabSave.bs = { geo: null, photo: null, t: 0 };
   if (pinMarker) { pinMarker.remove(); pinMarker = null; }
   $('#bs-prev').style.display = 'none';
   $('#pin-box').textContent = 'Chạm lên bản đồ để ghim vị trí.';
-  $('#bs-msg').textContent = '';
+  $('#bs-msg').textContent = ''; $('#pin-res').innerHTML = ''; $('#pin-q').value = '';
 }
 
 /* thu nhỏ ảnh + đóng dấu tên, giờ, toạ độ lên ảnh */
