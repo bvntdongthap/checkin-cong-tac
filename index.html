@@ -164,8 +164,8 @@
         <option value="thang">Theo tháng</option><option value="tatca">Tất cả</option>
       </select>
       <button class="sec nav" id="d-prev" title="Kỳ trước">‹</button>
-      <input type="date" id="f-date" title="Chọn ngày (theo tuần: chọn một ngày bất kỳ trong tuần)">
-      <input type="month" id="f-month" title="Chọn tháng" style="display:none">
+      <input type="date" id="f-date" lang="vi-VN" title="Chọn ngày (theo tuần: chọn một ngày bất kỳ trong tuần)">
+      <input type="month" id="f-month" lang="vi-VN" title="Chọn tháng" style="display:none">
       <button class="sec nav" id="d-next" title="Kỳ sau">›</button>
       <select id="f-phong"><option value="">Tất cả phòng</option></select>
       <select id="f-cb"><option value="">Tất cả cán bộ</option></select>
@@ -766,7 +766,7 @@ $('#d-csv').addEventListener('click', async () => {
 
     // khối ký tên cuối báo cáo: Người lập (trái) · TP. HCNS (giữa) · BLĐ (phải)
     const sig = ws.lastRow.number + 2;
-    [['Người lập', 1, 4], ['TP. HCNS', 7, 10], ['BLĐ', 11, N]].forEach(([t, a, b]) => {
+    [['Người lập', 1, 4], ['TP. HCNS', 5, 8], ['BLĐ', 9, N]].forEach(([t, a, b]) => {
       ws.mergeCells(sig, a, sig, b); ws.mergeCells(sig + 1, a, sig + 1, b);
       const c1 = ws.getCell(sig, a); c1.value = t; c1.alignment = { horizontal: 'center', vertical: 'top' }; font(c1, { bold: true });
       const c2 = ws.getCell(sig + 1, a); c2.value = '(Ký, ghi rõ họ tên)'; c2.alignment = { horizontal: 'center', vertical: 'top' }; font(c2, { italic: true });
