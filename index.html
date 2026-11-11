@@ -109,6 +109,7 @@
   <button class="back" data-go="v-home">← Chọn lại vai trò</button>
   <h2>Checkin công tác</h2>
 
+  <div id="s-common">
   <label class="f" for="s-name">Cán bộ checkin *</label>
   <select id="s-name"></select>
   <div class="box" id="s-info" style="display:none"></div>
@@ -122,9 +123,10 @@
   <label class="f" for="s-pt">Phương tiện *</label>
   <select id="s-pt"><option value="">— Chọn —</option><option value="Tự túc">Tự túc</option><option value="Công ty bố trí xe">Công ty bố trí xe</option></select>
 
+  </div>
   <div class="tabs">
-    <button type="button" class="tab on" data-tab="live">📸 Trực tiếp</button>
-    <button type="button" class="tab" data-tab="bs">🗂 Bổ sung</button>
+    <button type="button" class="tab on" data-tab="live">📸 Checkin trực tiếp</button>
+    <button type="button" class="tab" data-tab="bs">🗂 Bổ sung công tác</button>
   </div>
   <div class="panel on" id="p-live">
     <label class="f">Vị trí hiện tại * (GPS)</label>
@@ -151,10 +153,6 @@
     <label class="f">Ghim vị trí công tác trên bản đồ * (chạm để ghim, kéo ghim để chỉnh)</label>
     <div id="pin-map"></div>
     <div class="box" id="pin-box">Chạm lên bản đồ để ghim vị trí.</div>
-    <label class="f" for="gm-in">Hoặc dán toạ độ / link Google Maps</label>
-    <input type="text" id="gm-in" placeholder="VD: 10.293, 105.757  hoặc dán link Google Maps">
-    <div class="row" style="margin-top:8px"><button class="sec" id="gm-use">Dùng toạ độ này</button></div>
-    <div class="msg" id="gm-msg"></div>
     <label class="f">Ảnh bổ sung * (chọn từ máy)</label>
     <canvas id="bs-prev"></canvas>
     <div class="row" style="margin-top:8px"><button class="sec" id="pick-btn">📁 Chọn ảnh từ máy</button></div>
@@ -463,12 +461,14 @@ $('#cam-retake').addEventListener('click', openCam);
 $('#cam-flip').addEventListener('click', () => { facing = facing === 'user' ? 'environment' : 'user'; openCam(); });
 function resetCam() { stopCam(); facing = 'user'; photoFile = null; camView.classList.remove('shot', 'live'); camBtns(true, false, false, false); camMsg(''); }
 let curTab = 'live', pinMap = null, pinMarker = null;
+$('#p-live').prepend($('#s-common'));
 const tabSave = { live: { geo: null, photo: null, t: 0 }, bs: { geo: null, photo: null, t: 0 } };
 function setTab(t) {
   if (t === curTab) return;
   tabSave[curTab] = { geo, photo: photoFile, t: photoTakenAt };
   stopCam();
   curTab = t;
+  $('#p-' + t).prepend($('#s-common'));
   ({ geo, photo: photoFile, t: photoTakenAt } = tabSave[t]);
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
   $('#p-live').classList.toggle('on', t === 'live'); $('#p-bs').classList.toggle('on', t === 'bs');
@@ -496,12 +496,6 @@ $('#pick-file').addEventListener('change', async e => {
   } catch (err) { msg('⚠️ Không đọc được ảnh (' + err.message + ').', 'err'); }
 });
 
-const gmMsg = (t, c) => { const m = $('#gm-msg'); m.className = 'msg ' + (c || ''); m.textContent = t; };
-$('#gm-use').addEventListener('click', () => {
-  const p = parseLatLng($('#gm-in').value);
-  if (!p) return gmMsg('Không đọc được toạ độ. Dán dạng "10.293, 105.757" hoặc link Google Maps có toạ độ.', 'err');
-  setPin(p.lat, p.lng); gmMsg('✓ Đã nhận toạ độ.', 'ok');
-});
 
 /* bản đồ ghim (OpenStreetMap qua Leaflet): chạm để ghim, kéo ghim để chỉnh */
 function initPin() {
@@ -530,7 +524,6 @@ function resetBs() {
   if (pinMarker) { pinMarker.remove(); pinMarker = null; }
   $('#bs-prev').style.display = 'none';
   $('#pin-box').textContent = 'Chạm lên bản đồ để ghim vị trí.';
-  $('#gm-in').value = ''; gmMsg('');
   $('#bs-msg').textContent = '';
 }
 
