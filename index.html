@@ -618,7 +618,7 @@ $('#s-submit').addEventListener('click', async () => {
                    lat: geo.lat, lng: geo.lng, acc: geo.acc, kc: geo.kc, viTriLuc: geo.t, mayLuc: now,
                    thietBi: navigator.userAgent.slice(0, 160) };
     const imgs = await makeImages(photoFile, [
-      `${meta.hoTen} · ${meta.chucDanh}`, `${meta.donVi} · ${fmtTime(now)}`,
+      `${meta.hoTen} · ${meta.chucDanh}`, `${meta.donVi} · ${meta.kieu === 'bs' ? 'Ngày ' + ngay.split('-').reverse().join('/') : fmtTime(now)}`,
       `${KC_LABEL}: ${fmtKc(geo.kc)}`, `📍 ${geo.lat}, ${geo.lng}${accTxt(geo.acc)}` ]);
     meta.anhNho = imgs.thumb;
     sMsg('Đang mã hoá và gửi…', 'muted');
@@ -735,9 +735,20 @@ function shiftKy(n) {
   }
   renderDash();
 }
+/* bản bổ sung: thời gian tính theo ngày đi công tác đã chọn (giờ ghi lại là lúc gửi) */
+function effTs(r) {
+  if (r.kieu === 'bs' && r.ngayCongTac) { const [y, m, d] = r.ngayCongTac.split('-').map(Number); return new Date(y, m - 1, d, 12).getTime(); }
+  return r.at;
+}
+function whenPlain(r) {
+  if (r.kieu === 'bs' && r.ngayCongTac) return `${r.ngayCongTac.split('-').reverse().join('/')} (bổ sung lúc ${fmtTime(r.at)})`;
+  return fmtTime(r.at);
+}
+const whenHtml = r => (r.kieu === 'bs' && r.ngayCongTac)
+  ? `Ngày ${r.ngayCongTac.split('-').reverse().join('/')} <span class="muted">(bổ sung lúc ${fmtTime(r.at)})</span>` : fmtTime(r.at);
 function filtered() {
   const per = period(), p = $('#f-phong').value, cb = $('#f-cb').value, q = $('#f-q').value.trim().toLowerCase();
-  return rows.filter(r => (!per.from || (r.at >= per.from && r.at < per.to)) && (r.bad || !p || r.phong === p) &&
+  return rows.filter(r => (!per.from || (effTs(r) >= per.from && effTs(r) < per.to)) && (r.bad || !p || r.phong === p) &&
     (r.bad || !cb || r.hoTen === cb) &&
     (!q || r.bad || `${r.hoTen} ${r.chucDanh} ${r.donVi} ${r.noiDung}`.toLowerCase().includes(q)));
 }
@@ -760,12 +771,12 @@ function renderDash() {
         <div class="bd">
           <div class="nm">${esc(r.hoTen)}${r.chucDanh ? ` <span class="muted" style="font-weight:normal">· ${esc(r.chucDanh)}</span>` : ''}</div>
           <div class="muted">${esc(r.donVi)}</div>
-          <div>🕒 ${fmtTime(r.at)}</div>
+          <div>🕒 ${whenHtml(r)}</div>
           <div>📍 <a href="${mapLink(r.lat, r.lng)}" target="_blank" rel="noopener">${r.lat}, ${r.lng}</a> <span class="${r.acc > 200 ? 'warn' : 'muted'}">${r.acc == null ? '' : '±' + r.acc + ' m'}</span></div>
           <div>📏 ${KC_LABEL}: <b>${fmtKc(r.kc ?? kcMet(r.lat, r.lng))}</b> · <a href="${dirLink(r.lat, r.lng)}" target="_blank" rel="noopener">Chỉ đường</a></div>
           ${r.noiDung ? `<div>📝 ${esc(r.noiDung)}</div>` : ''}
           <div>📅 ${r.ngayCongTac ? r.ngayCongTac.split('-').reverse().join('/') : '—'} · ${esc(r.phuongTien || '—')}${r.kieu ? ' · ' + (r.kieu === 'bs' ? 'Bổ sung' : 'Trực tiếp') : ''}</div>
-          ${Math.abs(r.mayLuc - r.at) > 10 * 60e3 ? `<div class="warn">Giờ trên máy lệch ${Math.round(Math.abs(r.mayLuc - r.at) / 60e3)} phút</div>` : ''}
+          ${r.kieu !== 'bs' && Math.abs(r.mayLuc - r.at) > 10 * 60e3 ? `<div class="warn">Giờ trên máy lệch ${Math.round(Math.abs(r.mayLuc - r.at) / 60e3)} phút</div>` : ''}
           <button class="del" data-del="${r.id}">🗑 Xoá</button>
         </div></div>`).join('') || '<div class="muted">Không có lượt checkin nào.</div>';
 }
@@ -917,7 +928,7 @@ $('#d-csv').addEventListener('click', async () => {
       const [iw, ih] = await imgSize(src), imgH = Math.round(IMG_W * ih / iw);
       const ngayTxt = r.ngayCongTac ? r.ngayCongTac.split('-').reverse().join('/') : '—';
       const row = ws.addRow([i + 1, '', r.hoTen, r.chucDanh, r.phong, gdPhongText(r), blText(r), r.noiDung, ngayTxt,
-        r.phuongTien || '—', fmtTime(r.at),
+        r.phuongTien || '—', whenPlain(r),
         +((r.kc ?? kcMet(r.lat, r.lng)) / 1000).toFixed(2),
         { text: 'Xem bản đồ', hyperlink: mapLink(r.lat, r.lng) }]);
       row.height = (imgH + 10) * 0.75;
