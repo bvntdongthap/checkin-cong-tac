@@ -45,7 +45,8 @@
   .cam-view { position:relative; border:2px dashed var(--teal2); border-radius:10px; overflow:hidden; background:#EAF5F7;
               min-height:160px; display:flex; align-items:center; justify-content:center; }
   .cam-view video, .cam-view canvas { display:none; width:100%; max-height:70vh; object-fit:contain; background:#000; }
-  .cam-view.live video, .cam-view.shot canvas { display:block; }
+  #cam-video { display:block; position:absolute; width:2px; height:2px; opacity:0; pointer-events:none; }   /* vẫn phát (iPhone) nhưng không hiện */
+  .cam-view.live #cam-prev, .cam-view.shot #cam-shot { display:block; }
   .cam-view.live, .cam-view.shot { border-style:solid; border-color:var(--teal); }
   .cam-view.live .cam-ph, .cam-view.shot .cam-ph { display:none; }
   .cam-view.mirror video { transform:scaleX(-1); }
@@ -142,6 +143,7 @@
   <div class="cam" id="cam">
     <div class="cam-view">
       <video id="cam-video" playsinline webkit-playsinline muted autoplay disablepictureinpicture></video>
+      <canvas id="cam-prev"></canvas>
       <canvas id="cam-shot"></canvas>
       <div class="cam-ph" id="cam-ph">📷 Chưa mở camera<br><button type="button" id="cam-open">Mở camera</button></div>
       <!-- thanh nút nằm trên khung camera, phía dưới -->
@@ -356,6 +358,7 @@ const DS = [
   { ten: 'Trần Minh Thi',      chucDanh: 'Phó Giám Đốc Công Ty', phong: 'Ban lãnh đạo', khuVuc: 'Phụ trách Phòng 2, kiêm nhiệm VPKV Tháp Mười', bld: '' },
   { ten: 'Nguyễn Minh Trí',    chucDanh: 'PGĐ Phòng KD1', phong: 'Phòng 1', khuVuc: 'Ban Cao Lãnh - Lấp Vò', bld: 'Nguyễn Văn Phương – Phó Giám Đốc Công Ty' },
   { ten: 'Lê Thanh Cường',     chucDanh: 'PTKD KV',       phong: 'Phòng 1', khuVuc: 'VPKV Thanh Bình',       bld: 'Nguyễn Văn Phương – Phó Giám Đốc Công Ty' },
+  { ten: 'Lê Bá Vũ Định',     chucDanh: 'CB PTKV',       phong: 'Phòng 1', khuVuc: '', bld: 'Nguyễn Văn Phương – Phó Giám Đốc Công Ty' },
   { ten: 'Lê Nguyễn Anh Tuấn', chucDanh: 'PTKD KV',       phong: 'Phòng 2', khuVuc: 'VPKV Sa Đéc',           bld: 'Trần Minh Thi – Phó Giám Đốc Công Ty' },
   { ten: 'Trần Quang Vinh',    chucDanh: 'PGĐ Phòng KD3', phong: 'Phòng 3', khuVuc: 'VPKV Hồng Ngự',         bld: 'Nguyễn Văn Phương – Phó Giám Đốc Công Ty' },
   { ten: 'Huỳnh Tuấn Anh',     chucDanh: 'PTKD KV',       phong: 'Phòng 3', khuVuc: 'VPKV Tân Hồng',         bld: 'Nguyễn Văn Phương – Phó Giám Đốc Công Ty' },
@@ -374,7 +377,7 @@ $('#s-date').value = dayKey(Date.now());
 function showInfo() {
   const cb = canBo(), box = $('#s-info');
   box.style.display = cb ? '' : 'none';
-  if (cb) box.innerHTML = `${esc(cb.phong)} · ${esc(cb.khuVuc)}<br>Chức danh: <b>${esc(cb.chucDanh)}</b>${cb.bld ? `<br>BLĐ phụ trách: ${esc(cb.bld)}` : ''}`;
+  if (cb) box.innerHTML = `${esc([cb.phong, cb.khuVuc].filter(Boolean).join(' · '))}<br>Chức danh: <b>${esc(cb.chucDanh)}</b>${cb.bld ? `<br>BLĐ phụ trách: ${esc(cb.bld)}` : ''}`;
 }
 nameEl.addEventListener('change', () => { showInfo(); sMsg(''); });
 function updNote() { const n = noteEl.value.trim().replace(/\s+/g, ' ').length, el = $('#note-count'); el.textContent = `${n}/20 ký tự`; el.style.color = n >= 20 ? 'var(--ok)' : 'var(--muted)'; }
@@ -429,7 +432,18 @@ function getGeo() {
 $('#geo-btn').addEventListener('click', getGeo);
 
 /* ---------- camera trực tiếp (điện thoại hoặc máy tính) — không cho chọn ảnh có sẵn ---------- */
-const camView = $('.cam-view'), video = $('#cam-video'), shot = $('#cam-shot');
+const camView = $('.cam-view'), video = $('#cam-video'), shot = $('#cam-shot'), prev = $('#cam-prev');
+let rafId = 0;
+const pctx = prev.getContext('2d');
+function drawPrev() {
+  if (stream && video.videoWidth) {
+    if (prev.width !== video.videoWidth) { prev.width = video.videoWidth; prev.height = video.videoHeight; }
+    pctx.save();
+    if (facing === 'user') { pctx.translate(prev.width, 0); pctx.scale(-1, 1); }   // xem trước như gương
+    pctx.drawImage(video, 0, 0); pctx.restore();
+  }
+  rafId = requestAnimationFrame(drawPrev);
+}
 let stream = null, facing = 'user';
 video.playsInline = true; video.setAttribute('playsinline', ''); video.setAttribute('webkit-playsinline', '');  // iPhone: không bật toàn màn hình
 let camCount = 0;
@@ -438,7 +452,7 @@ const camBtns = (open, snap, flip, retake) => {
   $('#cam-flip').style.display = flip ? '' : 'none'; $('#cam-retake').style.display = retake ? '' : 'none';
 };
 const camMsg = (html, cls) => { const m = $('#cam-msg'); m.className = 'msg ' + (cls || ''); m.innerHTML = html; };
-function stopCam() { if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; video.srcObject = null; camView.classList.remove('live'); }
+function stopCam() { cancelAnimationFrame(rafId); if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; video.srcObject = null; camView.classList.remove('live'); }
 async function openCam() {
   stopCam(); camMsg('Đang mở camera… (nếu máy hỏi, hãy bấm <b>Cho phép</b>)', 'muted');
   try {
@@ -447,6 +461,7 @@ async function openCam() {
       video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 960 } } });
     video.srcObject = stream; await video.play();
     photoFile = null; camView.classList.remove('shot'); camView.classList.add('live');
+    cancelAnimationFrame(rafId); drawPrev();
     camView.classList.toggle('mirror', facing === 'user');
     try { camCount = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput').length; } catch {}
     camBtns(false, true, camCount !== 1, false); camMsg('');
@@ -616,7 +631,7 @@ $('#s-submit').addEventListener('click', async () => {
     sMsg('Đang xử lý ảnh…', 'muted');
     const now = Date.now();
     const meta = { kieu: curTab, ngayCongTac: ngay, phuongTien: pt, hoTen: cb.ten, chucDanh: cb.chucDanh, phong: cb.phong, khuVuc: cb.khuVuc, bld: cb.bld,
-                   donVi: `${cb.phong} · ${cb.khuVuc}`, noiDung: noteEl.value.trim(),
+                   donVi: [cb.phong, cb.khuVuc].filter(Boolean).join(' · '), noiDung: noteEl.value.trim(),
                    lat: geo.lat, lng: geo.lng, acc: geo.acc, kc: geo.kc, viTriLuc: geo.t, mayLuc: now,
                    thietBi: navigator.userAgent.slice(0, 160) };
     const imgs = await makeImages(photoFile, [
