@@ -126,8 +126,6 @@
   <div class="muted" id="note-count" style="font-size:13px;margin-top:4px;text-align:right">0/20 ký tự</div>
   <label class="f" for="s-date">Ngày đi công tác *</label>
   <input type="date" id="s-date" lang="vi-VN">
-  <label class="f" for="s-km">Số km đi công tác *</label>
-  <input type="number" id="s-km" inputmode="decimal" min="0" step="0.1" placeholder="VD: 25">
   <label class="f" for="s-pt">Phương tiện *</label>
   <select id="s-pt"><option value="">— Chọn —</option><option value="Tự túc">Tự túc</option><option value="Công ty bố trí xe">Công ty bố trí xe</option></select>
 
@@ -604,9 +602,8 @@ $('#s-submit').addEventListener('click', async () => {
   if (!cb) return sMsg('Vui lòng chọn tên của bạn.', 'err'), nameEl.focus();
   const note = noteEl.value.trim().replace(/\s+/g, ' ');
   if (note.length < 20) return sMsg(`Nội dung công tác phải có ít nhất 20 ký tự (hiện ${note.length}).`, 'err'), noteEl.focus();
-  const ngay = $('#s-date').value, km = parseFloat($('#s-km').value), pt = $('#s-pt').value;
+  const ngay = $('#s-date').value, pt = $('#s-pt').value;
   if (!ngay) return sMsg('Vui lòng chọn ngày đi công tác.', 'err'), $('#s-date').focus();
-  if (!(km >= 0)) return sMsg('Vui lòng nhập số km đi công tác.', 'err'), $('#s-km').focus();
   if (!pt) return sMsg('Vui lòng chọn phương tiện (Tự túc / Công ty bố trí xe).', 'err'), $('#s-pt').focus();
   if (!photoFile) return sMsg(curTab === 'live' ? 'Vui lòng mở camera và chụp ảnh.' : 'Vui lòng chọn ảnh từ máy.', 'err');
   if (curTab === 'live' && Date.now() - photoTakenAt > 10 * 60e3) { resetCam(); return sMsg('Ảnh đã chụp quá 10 phút — vui lòng chụp lại.', 'err'); }
@@ -616,7 +613,7 @@ $('#s-submit').addEventListener('click', async () => {
     if (!geo) throw new Error(curTab === 'live' ? 'Chưa có vị trí — bắt buộc bật định vị' : 'Chưa ghim vị trí trên bản đồ');
     sMsg('Đang xử lý ảnh…', 'muted');
     const now = Date.now();
-    const meta = { kieu: curTab, ngayCongTac: ngay, soKm: km, phuongTien: pt, hoTen: cb.ten, chucDanh: cb.chucDanh, phong: cb.phong, khuVuc: cb.khuVuc, bld: cb.bld,
+    const meta = { kieu: curTab, ngayCongTac: ngay, phuongTien: pt, hoTen: cb.ten, chucDanh: cb.chucDanh, phong: cb.phong, khuVuc: cb.khuVuc, bld: cb.bld,
                    donVi: `${cb.phong} · ${cb.khuVuc}`, noiDung: noteEl.value.trim(),
                    lat: geo.lat, lng: geo.lng, acc: geo.acc, kc: geo.kc, viTriLuc: geo.t, mayLuc: now,
                    thietBi: navigator.userAgent.slice(0, 160) };
@@ -634,7 +631,7 @@ $('#s-submit').addEventListener('click', async () => {
     lsSet(LS_NAME, meta.hoTen);
     $('#done-sum').innerHTML = `<b>${esc(meta.hoTen)}</b> · ${esc(meta.chucDanh)}<br>${esc(meta.donVi)}<br>${fmtTime(now)}<br>
       📍 <a href="${mapLink(geo.lat, geo.lng)}" target="_blank" rel="noopener">${geo.lat}, ${geo.lng}</a>${accTxt(geo.acc)}<br>📏 ${KC_LABEL}: <b>${fmtKc(geo.kc)}</b>`;
-    noteEl.value = ''; updNote(); $('#s-km').value = ''; $('#s-pt').value = ''; (curTab === 'bs' ? resetBs() : resetCam()); sMsg('');
+    noteEl.value = ''; updNote(); $('#s-pt').value = ''; (curTab === 'bs' ? resetBs() : resetCam()); sMsg('');
     go('v-done');
   } catch (e) {
     sMsg('⚠️ ' + esc(navigator.onLine ? e.message : 'Mất mạng — có mạng lại thì bấm Gửi checkin.'), 'err');
@@ -767,7 +764,7 @@ function renderDash() {
           <div>📍 <a href="${mapLink(r.lat, r.lng)}" target="_blank" rel="noopener">${r.lat}, ${r.lng}</a> <span class="${r.acc > 200 ? 'warn' : 'muted'}">${r.acc == null ? '' : '±' + r.acc + ' m'}</span></div>
           <div>📏 ${KC_LABEL}: <b>${fmtKc(r.kc ?? kcMet(r.lat, r.lng))}</b> · <a href="${dirLink(r.lat, r.lng)}" target="_blank" rel="noopener">Chỉ đường</a></div>
           ${r.noiDung ? `<div>📝 ${esc(r.noiDung)}</div>` : ''}
-          <div>📅 ${r.ngayCongTac ? r.ngayCongTac.split('-').reverse().join('/') : '—'} · 🚗 ${r.soKm != null ? r.soKm + ' km' : '—'} · ${esc(r.phuongTien || '—')}${r.kieu ? ' · ' + (r.kieu === 'bs' ? 'Bổ sung' : 'Trực tiếp') : ''}</div>
+          <div>📅 ${r.ngayCongTac ? r.ngayCongTac.split('-').reverse().join('/') : '—'} · ${esc(r.phuongTien || '—')}${r.kieu ? ' · ' + (r.kieu === 'bs' ? 'Bổ sung' : 'Trực tiếp') : ''}</div>
           ${Math.abs(r.mayLuc - r.at) > 10 * 60e3 ? `<div class="warn">Giờ trên máy lệch ${Math.round(Math.abs(r.mayLuc - r.at) / 60e3)} phút</div>` : ''}
           <button class="del" data-del="${r.id}">🗑 Xoá</button>
         </div></div>`).join('') || '<div class="muted">Không có lượt checkin nào.</div>';
@@ -848,7 +845,7 @@ $('#d-csv').addEventListener('click', async () => {
     const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('Báo cáo công tác');
     const IMG_W = 165;
     const COLS = [['STT', 6], ['Ảnh checkin', 26], ['Họ tên', 18], ['Chức danh', 16], ['Phòng', 10], ['Giám đốc phòng phụ trách', 20],
-      ['BLĐ phụ trách', 24], ['Nội dung công tác', 20], ['Ngày đi công tác', 13], ['Số km', 9], ['Phương tiện', 16],
+      ['BLĐ phụ trách', 24], ['Nội dung công tác', 20], ['Ngày đi công tác', 13], ['Phương tiện', 16],
       ['Thời gian checkin', 17], [`${KC_LABEL} (km)`, 16], ['Google Maps', 12]];
     const N = COLS.length, HR = 7;
     ws.columns = COLS.map(([, w]) => ({ width: w }));
@@ -920,7 +917,7 @@ $('#d-csv').addEventListener('click', async () => {
       const [iw, ih] = await imgSize(src), imgH = Math.round(IMG_W * ih / iw);
       const ngayTxt = r.ngayCongTac ? r.ngayCongTac.split('-').reverse().join('/') : '—';
       const row = ws.addRow([i + 1, '', r.hoTen, r.chucDanh, r.phong, gdPhongText(r), blText(r), r.noiDung, ngayTxt,
-        r.soKm ?? '', r.phuongTien || '—', fmtTime(r.at),
+        r.phuongTien || '—', fmtTime(r.at),
         +((r.kc ?? kcMet(r.lat, r.lng)) / 1000).toFixed(2),
         { text: 'Xem bản đồ', hyperlink: mapLink(r.lat, r.lng) }]);
       row.height = (imgH + 10) * 0.75;
