@@ -492,6 +492,7 @@ function setTab(t) {
     else if (!photoFile) { facing = 'user'; openCam(); }
   } else {
     initPin();
+    $('#s-date').min = minDay();
     if (geo) renderGeoOK('#pin-box');
   }
 }
@@ -604,6 +605,7 @@ $('#s-submit').addEventListener('click', async () => {
   if (note.length < 20) return sMsg(`Nội dung công tác phải có ít nhất 20 ký tự (hiện ${note.length}).`, 'err'), noteEl.focus();
   const ngay = $('#s-date').value, pt = $('#s-pt').value;
   if (!ngay) return sMsg('Vui lòng chọn ngày đi công tác.', 'err'), $('#s-date').focus();
+  if (curTab === 'bs' && isClosed(ngay)) return sMsg('Đã qua tháng ' + ngay.split('-').reverse().slice(1).join('/') + ' nên không bổ sung được. Chỉ bổ sung trong tháng hiện tại.', 'err'), $('#s-date').focus();
   if (!pt) return sMsg('Vui lòng chọn phương tiện (Tự túc / Công ty bố trí xe).', 'err'), $('#s-pt').focus();
   if (!photoFile) return sMsg(curTab === 'live' ? 'Vui lòng mở camera và chụp ảnh.' : 'Vui lòng chọn ảnh từ máy.', 'err');
   if (curTab === 'live' && Date.now() - photoTakenAt > 10 * 60e3) { resetCam(); return sMsg('Ảnh đã chụp quá 10 phút — vui lòng chụp lại.', 'err'); }
@@ -736,6 +738,11 @@ function shiftKy(n) {
   renderDash();
 }
 /* bản bổ sung: thời gian tính theo ngày đi công tác đã chọn (giờ ghi lại là lúc gửi) */
+/* bổ sung của tháng đã qua: bị khoá (không gửi thêm, không xoá) */
+function monthIdx(iso) { const [y, m] = iso.split('-').map(Number); return y * 12 + m; }
+function isClosed(iso) { const d = new Date(); return monthIdx(iso) < d.getFullYear() * 12 + d.getMonth() + 1; }
+function lockedRec(r) { return r.kieu === 'bs' && !!r.ngayCongTac && isClosed(r.ngayCongTac); }
+function minDay() { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-01`; }
 function effTs(r) {
   if (r.kieu === 'bs' && r.ngayCongTac) { const [y, m, d] = r.ngayCongTac.split('-').map(Number); return new Date(y, m - 1, d, 12).getTime(); }
   return r.at;
@@ -777,7 +784,7 @@ function renderDash() {
           ${r.noiDung ? `<div>📝 ${esc(r.noiDung)}</div>` : ''}
           <div>📅 ${r.ngayCongTac ? r.ngayCongTac.split('-').reverse().join('/') : '—'} · ${esc(r.phuongTien || '—')}${r.kieu ? ' · ' + (r.kieu === 'bs' ? 'Bổ sung' : 'Trực tiếp') : ''}</div>
           ${r.kieu !== 'bs' && Math.abs(r.mayLuc - r.at) > 10 * 60e3 ? `<div class="warn">Giờ trên máy lệch ${Math.round(Math.abs(r.mayLuc - r.at) / 60e3)} phút</div>` : ''}
-          <button class="del" data-del="${r.id}">🗑 Xoá</button>
+          ${lockedRec(r) ? '<div class="muted">🔒 Đã khoá (bổ sung của tháng đã qua)</div>' : `<button class="del" data-del="${r.id}">🗑 Xoá</button>`}
         </div></div>`).join('') || '<div class="muted">Không có lượt checkin nào.</div>';
 }
 $('#f-date').addEventListener('change', renderDash);
@@ -803,13 +810,15 @@ $('#d-grid').addEventListener('click', async e => {
   const b = e.target.closest('[data-del]'); if (!b) return;
   e.stopPropagation();
   const r = rows.find(x => x.id === b.dataset.del); if (!r) return;
+  if (lockedRec(r)) return alert('Lượt bổ sung của tháng đã qua nên đã bị khoá, không xoá được.');
   const ai = r.bad ? 'lượt không giải mã được' : `${r.hoTen} (${r.chucDanh})`;
   if (!confirm(`Xoá lượt checkin của ${ai} lúc ${fmtTime(r.at)}?\n\nĐã xoá thì KHÔNG khôi phục được.`)) return;
   b.disabled = true; b.textContent = 'Đang xoá…';
   try { await delIds([r.id]); } catch (err) { alert('Không xoá được: ' + err.message); b.disabled = false; b.textContent = '🗑 Xoá'; }
 });
 $('#d-delall').addEventListener('click', async () => {
-  const list = filtered(); if (!list.length) return;
+  const list = filtered().filter(r => r.bad || !lockedRec(r));
+  if (!list.length) return alert('Không có lượt nào được xoá: các lượt bổ sung của tháng đã qua đã bị khoá.');
   const per = period(), p = $('#f-phong').value, q = $('#f-q').value.trim();
   const pham = [per.label, p, q && `tìm "${q}"`].filter(Boolean).join(' · ');
   if (!confirm(`Xoá HẾT ${list.length} lượt checkin đang hiển thị?\n(${pham})\n\nĐã xoá thì KHÔNG khôi phục được.`)) return;
